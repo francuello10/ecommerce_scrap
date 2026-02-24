@@ -7,11 +7,11 @@ import logging
 import re
 
 from workers.web_monitor.extractors.generic_html import GenericHtmlExtractor
-from workers.web_monitor.models import ExtractionResult, EcommercePlatform
+from workers.web_monitor.models import ExtractionResult, EcommercePlatform, ProductData
 
 logger = logging.getLogger(__name__)
 
-_PRODUCT_JSON = re.compile(r"var\s+meta\s*=\s*(\{.*?\});", re.DOTALL)
+_PRODUCT_JSON = re.compile(r"(?:var|window)\.meta\s*=\s*(\{.*?\})\s*(?:;|</script>)", re.DOTALL)
 
 
 class ShopifyExtractor(GenericHtmlExtractor):
@@ -29,7 +29,6 @@ class ShopifyExtractor(GenericHtmlExtractor):
         meta = self._parse_meta()
         if meta:
             logger.debug("Shopify meta found")
-            # TODO Phase 3: Extract product variants, compare_at_price for promos
 
         # Try JSON-LD structured data
         for script in self.soup.find_all("script", type="application/ld+json"):
@@ -37,11 +36,31 @@ class ShopifyExtractor(GenericHtmlExtractor):
                 data = json.loads(script.string or "")
                 if isinstance(data, dict) and data.get("@type") == "Product":
                     logger.debug("Shopify Product JSON-LD found")
-                    # TODO Phase 3: Extract structured price data
             except (json.JSONDecodeError, AttributeError):
                 pass
 
         return result
+
+    async def extract_product(self) -> ProductData | None:
+        """
+        Extract Shopify product data from meta object or JSON-LD.
+        """
+        meta = self._parse_meta()
+        if meta and meta.get("product"):
+            prod = meta["product"]
+            variants = prod.get("variants", [{}])
+            v0 = variants[0] if variants else {}
+            
+            return ProductData(
+                sku=str(v0.get("sku") or v0.get("id")),
+                title=prod.get("type"), # Often 'type' is the main name in meta, or use title
+                brand=prod.get("vendor"),
+                list_price=float(v0.get("price") or 0) / 100.0 if v0.get("price") else None,
+                sale_price=None, # Shopify compare_at_price needs careful parsing
+                is_in_stock=not v0.get("public_title") == "Sold Out",
+            )
+
+        return await super().extract_product()
 
     def _parse_meta(self) -> dict | None:
         match = _PRODUCT_JSON.search(self.html)

@@ -15,13 +15,10 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models import (
-    BriefStatus,
-    ChangeEvent,
-    Competitor,
-    DailyBrief,
-    Severity,
     WeeklyBrief,
+    AIGeneratorSettings,
 )
+from core.ai.factory import AIFactory
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +69,41 @@ async def generate_daily_brief(session: AsyncSession, brief_date: date | None = 
         )
         comp_names = {row.id: row.name for row in result.all()}
 
-    # Generate Markdown
-    md = _build_markdown(brief_date, by_competitor, comp_names)
+    # Try AI generation first
+    res_ai = await session.execute(
+        select(AIGeneratorSettings).where(AIGeneratorSettings.is_active == True).limit(1)
+    )
+    ai_settings = res_ai.scalar_one_or_none()
+    
+    md = ""
+    if ai_settings:
+        logger.info("Using AI (%s) for Daily Brief", ai_settings.model_name)
+        try:
+            provider = AIFactory.create(
+                model_name=ai_settings.model_name,
+                temperature=ai_settings.temperature,
+            )
+            # Build context for LLM
+            context_data = {
+                "date": brief_date.isoformat(),
+                "competitors": {
+                    comp_names.get(cid, f"ID:{cid}"): [
+                        {
+                            "type": e.event_type.value,
+                            "severity": e.severity.value,
+                            "change": f"{e.old_value} -> {e.new_value}" if e.old_value and e.new_value else (e.new_value or e.old_value)
+                        } for e in evts
+                    ] for cid, evts in by_competitor.items()
+                }
+            }
+            prompt = f"Analiza las siguientes señales detectadas hoy y genera el reporte:\n\n{json.dumps(context_data, indent=2, ensure_ascii=False)}"
+            md = await provider.generate_text(prompt, system_prompt=ai_settings.system_prompt)
+        except Exception as e:
+            logger.error("AI Briefing failed: %s", e)
+            md = _build_markdown(brief_date, by_competitor, comp_names)
+    else:
+        # Fallback to static Markdown
+        md = _build_markdown(brief_date, by_competitor, comp_names)
 
     # Generate JSON summary
     json_data = _build_json(brief_date, events, by_competitor, comp_names)

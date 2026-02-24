@@ -75,6 +75,23 @@ class CallToAction:
     position: str | None = None         # hero, sidebar, footer, popup
 
 
+@dataclass(frozen=True, slots=True)
+class ProductData:
+    """Structured product data for Catalog Intelligence."""
+
+    sku: str | None = None
+    title: str | None = None
+    url: str | None = None
+    brand: str | None = None
+    category_path: str | None = None
+    list_price: float | None = None
+    sale_price: float | None = None
+    currency: str = "ARS"
+    image_url: str | None = None
+    is_in_stock: bool = True
+    raw_metadata: dict[str, str] = field(default_factory=dict)
+
+
 @dataclass(slots=True)
 class ExtractionResult:
     """Consolidated result from a single extraction run."""
@@ -84,4 +101,5 @@ class ExtractionResult:
     financing: list[FinancingSignal] = field(default_factory=list)
     hero_banner: HeroBanner | None = None
     ctas: list[CallToAction] = field(default_factory=list)
+    product_data: ProductData | None = None
     raw_metadata: dict[str, str] = field(default_factory=dict)

@@ -33,6 +33,8 @@ dependencies = [
     # Utilities
     "python-dotenv>=1.0.0",
     "psycopg2-binary>=2.9.11",
+    "google-generativeai>=0.8.6",
+    "openai>=2.23.0",
 ]
 
 [dependency-groups]

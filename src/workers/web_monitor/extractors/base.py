@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from workers.web_monitor.models import ExtractionResult
+from workers.web_monitor.models import ExtractionResult, ProductData
 
 
 class BaseExtractor(ABC):
@@ -29,5 +29,13 @@ class BaseExtractor(ABC):
         """
         Main entry point. Runs all sub-extractors and returns
         a consolidated ExtractionResult.
+        """
+        ...
+
+    @abstractmethod
+    async def extract_product(self) -> ProductData | None:
+        """
+        Extract detailed product information if the current page
+        is a product detail page (PDP).
         """
         ...

@@ -54,7 +54,11 @@ class Settings(BaseSettings):
     )
     gemini_api_key: str = Field(
         default="",
-        description="Gemini Specific API Key (can be same as llm_api_key if using Gemini).",
+        description="Gemini Specific API Key.",
+    )
+    openai_api_key: str = Field(
+        default="",
+        description="OpenAI Specific API Key.",
     )
 
     # ── Google OAuth (for Directus or API) ───────────────────────────

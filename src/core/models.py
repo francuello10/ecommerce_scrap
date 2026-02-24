@@ -486,6 +486,7 @@ class PageSnapshot(Base):
     monitored_page_id: Mapped[int] = mapped_column(ForeignKey("monitored_page.id"), nullable=False)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("crawl_run.id"), nullable=True)
     raw_storage_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    screenshot_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     status: Mapped[SnapshotStatus] = mapped_column(Enum(SnapshotStatus), default=SnapshotStatus.PENDING_EXTRACTION)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -508,6 +509,8 @@ class NewsletterMessage(Base):
     subject: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     raw_html_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    body_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_optin_confirmation: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
@@ -710,3 +713,22 @@ class WeeklyBrief(Base):
     content_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AIGeneratorSettings(Base):
+    """
+    Configuration for the Briefing AI Engine.
+    Allows editing the system prompt and model choice from Directus.
+    """
+    __tablename__ = "ai_generator_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)  # e.g. "DEFAULT_DAILY_BRIEF"
+    model_name: Mapped[str] = mapped_column(String(100), default="gemini-1.5-pro")
+    system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    temperature: Mapped[float] = mapped_column(Numeric(3, 2), default=0.7)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

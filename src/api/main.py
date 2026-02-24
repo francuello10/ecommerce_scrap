@@ -14,6 +14,7 @@ from fastapi import FastAPI
 
 from api.routes.suggestions import router as suggestions_router
 from api.routes.onboarding import router as onboarding_router
+from api.routes.ai import router as ai_router
 
 
 @asynccontextmanager
@@ -36,6 +37,7 @@ app = FastAPI(
 # ── Routes ────────────────────────────────────────────────────────────
 app.include_router(suggestions_router)
 app.include_router(onboarding_router)
+app.include_router(ai_router)
 
 
 @app.get("/health")

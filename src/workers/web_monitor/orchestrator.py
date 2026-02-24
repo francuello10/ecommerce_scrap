@@ -31,7 +31,10 @@ from core.models import (
     SignalSource,
     SignalType,
     PageType,
+    Product,
+    PriceHistory,
 )
+from workers.web_monitor.models import ProductData
 from workers.web_monitor.platform_detector import PlatformDetector
 from workers.web_monitor.extractor_factory import ExtractorFactory
 from workers.tech_fingerprint.fingerprinter import TechFingerprinter
@@ -153,7 +156,13 @@ async def process_monitored_page(
         session.add(signal)
         signals_saved += 1
 
-    # 6. Mark snapshot as extracted
+    # 6. Save Catalog Data (if extracted)
+    product_data = await extractor.extract_product()
+    if product_data:
+        await _save_product_data(session, page, snapshot.id, product_data)
+        logger.info("  Catalog data saved for SKU: %s", product_data.sku)
+
+    # 7. Mark snapshot as extracted
     snapshot.status = SnapshotStatus.EXTRACTED
     logger.info("  Saved %d signals for snapshot #%d", signals_saved, snapshot.id)
 
@@ -169,6 +178,52 @@ async def process_monitored_page(
         logger.info("  Diff Engine detected %d changes", len(events))
 
     return True
+
+
+async def _save_product_data(
+    session: AsyncSession,
+    page: MonitoredPage,
+    snapshot_id: int,
+    data: ProductData,
+) -> None:
+    """Save/Update product and add price history entry."""
+    # 1. Ensure Product exists
+    res = await session.execute(
+        select(Product).where(
+            Product.competitor_id == page.competitor_id,
+            Product.sku == data.sku if data.sku else Product.url == page.url
+        )
+    )
+    product = res.scalar_one_or_none()
+    
+    if not product:
+        product = Product(
+            competitor_id=page.competitor_id,
+            sku=data.sku,
+            url=page.url,
+            brand=data.brand,
+            title=data.title,
+            category_path=data.category_path,
+        )
+        session.add(product)
+        await session.flush()
+    else:
+        # Update metadata if changed
+        product.title = data.title or product.title
+        product.brand = data.brand or product.brand
+        product.category_path = data.category_path or product.category_path
+        product.is_active = True
+
+    # 2. Add Price History
+    history = PriceHistory(
+        product_id=product.id,
+        snapshot_id=snapshot_id,
+        list_price=data.list_price,
+        sale_price=data.sale_price,
+        currency=data.currency or "ARS",
+        is_in_stock=data.is_in_stock,
+    )
+    session.add(history)
 
 
 async def run_web_monitor(ctx: dict) -> dict:

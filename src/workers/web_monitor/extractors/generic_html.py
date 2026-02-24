@@ -28,6 +28,7 @@ from workers.web_monitor.models import (
     HeroBanner,
     PromoSignal,
     EcommercePlatform,
+    ProductData,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,35 @@ class GenericHtmlExtractor(BaseExtractor):
         result.hero_banner = self._extract_hero()
 
         return result
+
+    async def extract_product(self) -> ProductData | None:
+        """
+        Generic product extraction using OpenGraph and Schema.org.
+        """
+        # 1. Try JSON-LD (Schema.org)
+        for script in self.soup.find_all("script", type="application/ld+json"):
+            try:
+                import json
+                data = json.loads(script.string or "")
+                
+                # Handle both object and list of objects
+                if isinstance(data, list):
+                    items = data
+                else:
+                    items = [data]
+
+                for item in items:
+                    if item.get("@type") == "Product":
+                        return self._parse_schema_product(item)
+            except Exception:
+                continue
+
+        # 2. Try OpenGraph / Meta tags
+        og_data = self._extract_og_product()
+        if og_data:
+            return og_data
+
+        return None
 
     # ── Private extraction methods ─────────────────────────────────────
 
@@ -275,4 +305,45 @@ class GenericHtmlExtractor(BaseExtractor):
             alt_text=alt_text,
             headline=headline,
             link_url=link_url,
+        )
+
+    def _parse_schema_product(self, data: dict) -> ProductData:
+        offers = data.get("offers", {})
+        if isinstance(offers, list):
+            offers = offers[0] if offers else {}
+
+        return ProductData(
+            sku=data.get("sku") or data.get("mpn"),
+            title=data.get("name"),
+            brand=data.get("brand", {}).get("name") if isinstance(data.get("brand"), dict) else data.get("brand"),
+            category_path=data.get("category"),
+            list_price=float(offers.get("price", 0)) if offers.get("price") else None,
+            currency=offers.get("priceCurrency", "ARS"),
+            is_in_stock="InStock" in str(offers.get("availability", "")),
+            image_url=data.get("image")[0] if isinstance(data.get("image"), list) else data.get("image"),
+        )
+
+    def _extract_og_product(self) -> ProductData | None:
+        def get_meta(prop):
+            tag = self.soup.find("meta", property=prop) or self.soup.find("meta", attrs={"name": prop})
+            return tag.get("content") if tag else None
+
+        title = get_meta("og:title") or self.soup.title.string if self.soup.title else None
+        if not title:
+            return None
+
+        price = get_meta("product:price:amount") or get_meta("og:price:amount")
+        currency = get_meta("product:price:currency") or get_meta("og:price:currency") or "ARS"
+        image = get_meta("og:image")
+        
+        # Check if it looks like a product page
+        if not get_meta("og:type") == "product" and not price:
+            return None
+
+        return ProductData(
+            title=title,
+            list_price=float(price) if price else None,
+            currency=currency,
+            image_url=image,
+            is_in_stock=True, # Default if meta present
         )

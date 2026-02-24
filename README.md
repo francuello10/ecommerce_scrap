@@ -1,16 +1,25 @@
 <div align="center">
 
 # 🔍 Competitive Intelligence Engine
+### The Strategic Edge for Modern eCommerce
 
-**Motor de inteligencia competitiva para eCommerce.**
-Monitorea competidores, detecta cambios en tiempo real, y genera briefs accionables.
+**Motor de inteligencia competitiva de grado enterprise.**
+Transformamos el caos del monitoreo web y newsletters en señales de negocio accionables, alertas en tiempo real y briefings estratégicos impulsados por IA.
 
 [![Python 3.12](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-316192.svg)](https://www.postgresql.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![AI-Powered](https://img.shields.io/badge/AI-Briefing_Engine-purple.svg)]()
 
 </div>
+
+---
+
+## 📈 Business Vision
+En un mercado de eCommerce saturado, la velocidad de reacción es el mayor activo competitivo. Este engine permite a los CMOs y Gerentes de eCommerce:
+- **Time-to-React < 1h**: Detectar cambios agresivos en la competencia (promos flash, cambios de envío) antes de que impacten en tu conversión.
+- **Shadow Pricing Tracking**: Entender no solo el precio de lista, sino la agresividad real de las cuotas y promociones bancarias.
+- **Strategic Briefing**: Eliminar el ruido operativo con resúmenes ejecutivos diarios generados por IA, listos para la toma de decisiones.
 
 ---
 
@@ -43,10 +52,11 @@ Monitorea competidores, detecta cambios en tiempo real, y genera briefs accionab
 - **Slack alerts**: Notificación inmediata cuando un competidor lanza una promo nueva o cambia precios
 - **Severity levels**: LOW → MEDIUM → HIGH → CRITICAL (solo CRITICAL dispara alerta inmediata)
 
-### 📊 Daily Briefs
-- **Brief diario**: Resumen ejecutivo de todas las actividades competitivas en 24h
-- **Brief semanal**: Tendencias y patrones a lo largo de la semana
-- **Baseline comparison**: "Us vs. Them" — compará tu empresa contra cada competidor
+### 📊 AI Intelligence Briefs
+- **Customizable AI Briefing**: Los reportes no son estáticos. Podes editar el **System Prompt** desde Directus para cambiar el tono, foco o idioma de los reportes generados por IA.
+- **Daily Brief**: Resumen ejecutivo de todas las actividades competitivas en 24h generado por LLM (Gemini/GPT).
+- **Weekly Brief**: Tendencias y patrones a lo largo de la semana.
+- **Baseline comparison**: "Us vs. Them" — compará tu empresa contra cada competidor.
 
 ### 🔬 Tech Stack Fingerprinting
 - **Layer 1**: Heurísticas rápidas (regex en HTML + headers HTTP)
@@ -78,8 +88,8 @@ make up
 
 # 5. Aplicar migraciones + seed data
 make db-upgrade
-make db-seed
-make db-seed-data
+make db-setup-all
+PYTHONPATH=src uv run python scripts/seed_ai_settings.py
 
 # 6. Levantar la API
 make api
@@ -100,29 +110,29 @@ make api
 ┌──────────────────────────────────────────────────────────────────┐
 │                        DIRECTUS 11                               │
 │                    (Admin Panel / CMS)                            │
-│     Manages: Competitors, Tiers, Feature Flags, Industries       │
+│     Manages: Competitors, Tiers, AI Prompts, Industries          │
 └───────────────────────┬──────────────────────────────────────────┘
                         │ reads schema
 ┌───────────────────────┼──────────────────────────────────────────┐
 │                  POSTGRESQL 16                                    │
-│   23+ tables: SaaS tenancy, competitors, snapshots, signals...   │
+│   25+ tables: SaaS tenancy, AI Settings, Snapshots, Catalog...   │
 └───────────────────────┬──────────────────────────────────────────┘
                         │
         ┌───────────────┼───────────────┐
         │               │               │
    ┌────▼────┐    ┌─────▼─────┐   ┌─────▼─────┐
    │ FastAPI  │    │ ARQ Worker│   │ ARQ Worker│
-   │  API     │    │ Web Mon.  │   │ Newsletter│
-   │ :8000    │    │ (HTTPX/PW)│   │ (IMAP)    │
+   │  API     │    │ Monitoring│   │ AI Brief. │
+   │ :8000    │    │ (HTTPX/PW)│   │ (LLM API) │
    └──────────┘    └───────────┘   └───────────┘
-        │               │               │
-        └───────────────┼───────────────┘
-                        │
-                   ┌────▼────┐
-                   │  Redis  │
-                   │  7.2    │
-                   │ (Broker)│
-                   └─────────┘
+         │               │               │
+         └───────────────┼───────────────┘
+                         │
+                    ┌────▼────┐
+                    │  Redis  │
+                    │  7.2    │
+                    │ (Broker)│
+                    └─────────┘
 ```
 
 ---
@@ -137,22 +147,20 @@ ecommerce_scrap/
 │   │   ├── database.py            # Async SQLAlchemy 2.0 engine
 │   │   ├── models.py              # ALL ORM models (25+ tables)
 │   │   └── notifications/
-│   │       └── slack.py           # Async Slack webhook
+│   │       └── slack.py           # Async Slack webhook (Future)
 │   ├── api/
 │   │   └── main.py                # FastAPI app + /health
 │   └── workers/
+│       ├── briefing/
+│       │   └── generator.py       # AI Briefing Engine (Custom Prompts)
 │       └── web_monitor/
 │           ├── orchestrator.py    # Main ARQ job
 │           ├── discovery.py       # Header/footer auto-discovery
-│           ├── platform_detector.py  # Layer 1 heuristics
-│           ├── extractor_factory.py  # Strategy Pattern router
-│           └── extractors/        # 7 platform extractors
+│           └── extractors/        # 7 platform extractors + Catalog
 ├── alembic/                       # DB migrations
-├── scripts/                       # Seed scripts
+├── scripts/                       # Seed scripts (Tiers, AI, Industries)
 ├── docs/                          # 10 architecture documents
-├── docker-compose.yml             # Postgres + Redis + Directus
 ├── Makefile                       # 20+ commands (make help)
-├── CLAUDE.md                      # AI-friendly project docs
 └── pyproject.toml                 # Dependencies (uv)
 ```
 
@@ -169,8 +177,7 @@ make api            # 🌐 Levantar FastAPI (dev mode)
 make worker         # ⚙️  Levantar ARQ worker
 make db-upgrade     # ⬆️  Aplicar migraciones
 make db-migrate     # 🗄️  Nueva migración (pide descripción)
-make db-seed        # 🌱 Insertar planes de suscripción
-make db-seed-data   # 📧 Insertar datos iniciales
+make db-setup-all   # 🚀 Setup completo (Tiers, Data, Industries)
 make test           # 🧪 Correr tests
 make lint           # 🔍 Chequear código con Ruff
 make format         # ✨ Formatear código
@@ -185,13 +192,13 @@ make format         # ✨ Formatear código
 | Grupo | Tablas | Descripción |
 |:---|:---|:---|
 | **SaaS** | `subscription_tier`, `client`, `client_competitor`, `upsell_event` | Multi-tenant con feature flags |
+| **AI Briefing** | `ai_generator_settings`, `daily_brief`, `weekly_brief` | Prompts personalizables y reportes |
 | **Suggestions** | `industry`, `competitor_industry` | Suggestion Engine por rubro y nivel |
-| **Config** | `competitor`, `monitored_page`, `newsletter_account`, `newsletter_subscription`, `signal_taxonomy` | Configuración editable desde Directus |
-| **Raw** | `crawl_run`, `page_snapshot`, `newsletter_message`, `job_execution_log` | Datos crudos (append-only) |
+| **Config** | `competitor`, `monitored_page`, `newsletter_account`, `newsletter_subscription` | Configuración editable desde Directus |
+| **Raw Data** | `page_snapshot`, `newsletter_message`, `job_execution_log` | Datos crudos para análisis |
 | **Tech** | `competitor_tech_profile`, `tech_profile_history`, `tech_profile_change` | Fingerprinting tecnológico |
-| **Catalog** | `product`, `price_history` | Preparado para Fase 2 |
-| **Results** | `detected_signal`, `change_event` | Señales y eventos de cambio |
-| **Briefs** | `daily_brief`, `weekly_brief` | Reportes generados |
+| **Catalog** | `product`, `price_history` | Tracking de SKU, Precios y Stock |
+| **Signals** | `detected_signal`, `change_event` | Hallazgos comerciales detectados |
 
 ---
 
@@ -208,11 +215,8 @@ make format         # ✨ Formatear código
 | Admin Panel | Directus 11 |
 | HTTP Client | HTTPX |
 | Browser Automation | Playwright |
-| Email | imap-tools |
-| AI/LLM | Gemini 1.5 Flash |
+| AI / LLM | Gemini 1.5 Pro / Flash |
 | Package Manager | uv (Astral) |
-| Task Runner | GNU Make |
-| Linter/Formatter | Ruff |
 
 ---
 
@@ -225,10 +229,7 @@ Toda la documentación vive en [`docs/`](docs/):
 | [01_architecture.md](docs/01_architecture.md) | Stack + principios de diseño |
 | [02_database_schema.md](docs/02_database_schema.md) | Modelo de datos completo |
 | [03_workflows.md](docs/03_workflows.md) | Flujos de workers/crons |
-| [05_stack_versions.md](docs/05_stack_versions.md) | Versiones exactas de todo |
-| [07_tech_fingerprinting.md](docs/07_tech_fingerprinting.md) | Detección de tech stack |
 | [08_pluggable_extractors.md](docs/08_pluggable_extractors.md) | Strategy Pattern para extractors |
-| [09_operational_flow.md](docs/09_operational_flow.md) | Flujo completo onboarding → brief |
 | [10_saas_business_model.md](docs/10_saas_business_model.md) | Multi-tenant + upsell |
 
 Para AI assistants (Cursor, Copilot, etc.), ver [`CLAUDE.md`](CLAUDE.md).
@@ -241,20 +242,18 @@ Para AI assistants (Cursor, Copilot, etc.), ver [`CLAUDE.md`](CLAUDE.md).
 - [x] Infrastructure (Docker, Postgres, Redis, Directus)
 - [x] 25+ SQLAlchemy models con migraciones
 - [x] Web Monitor: platform detection, signal extraction, auto-discovery
-- [x] Suggestion Engine: industry-based competitor recommendations (3 levels)
-- [x] SaaS multi-tenant con feature flags editables
+- [x] Suggestion Engine: industry-based competitor recommendations
+- [x] SaaS multi-tenant con feature flags
+- [x] IMAP Newsletter Monitor: matches emails to competitors
 
-### 🔜 Próximas Fases
-- [ ] **Newsletter Monitor**: IMAP reader + auto-subscription + double opt-in handler
-- [ ] **Diff Engine + Alertas Slack**: Detección de cambios entre snapshots + alertas CRITICAL
-- [ ] **Briefing Engine**: Daily/weekly briefs con baseline comparison
+### 🔜 Próximas Fases (En ejecución)
+- [ ] **📦 Catalog Intelligence** — Tracking de SKU, Precios y Stock para VTEX/Shopify.
+- [ ] **🧠 AI Briefing System** — Generación de reportes con prompts editables desde la DB.
 
 ### 🔮 Fases Futuras
-- [ ] **📦 Catalog Scraping** — Scraping completo del catálogo de productos de cada competidor. Tracking de precios, stock, productos nuevos/retirados. Usa las tablas `product` + `price_history` (ya creadas).
-- [ ] **👁️ Vision LLM Analysis** — Capturas de pantalla duales (con/sin popups) + full-page scroll. El LLM analiza la propuesta visual (hero banners, jerarquía de precios, CTAs). Usa Playwright para screenshots + Gemini Vision para análisis.
-- [ ] **📧 Newsletter Visual Analysis** — Renderizado de newsletters a imagen para análisis LLM. Métricas de frecuencia de envío por competidor.
-- [ ] **📊 Dashboard Frontend** — Panel web con gráficos de evolución de señales, comparativas entre competidores, y alertas en tiempo real.
-- [ ] **🔌 API Pública** — REST API para integraciones externas (gated por tier ENTERPRISE).
+- [ ] **� Multi-Channel Alerts** — Integración con Slack/Discord para alertas de cambios críticos.
+- [ ] **👁️ Vision LLM Analysis** — Análisis visual de homepages usando capturas de pantalla.
+- [ ] **📊 Dashboard Frontend** — Panel web avanzado con visualizaciones de tendencias.
 
 ---
 
