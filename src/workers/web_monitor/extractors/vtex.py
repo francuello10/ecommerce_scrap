@@ -13,10 +13,13 @@ import re
 from workers.web_monitor.extractors.generic_html import GenericHtmlExtractor
 from workers.web_monitor.models import ExtractionResult, EcommercePlatform, PromoSignal, ProductData
 
+from scrapling import Selector
+
 logger = logging.getLogger(__name__)
 
 # VTEX stores page state in a window.__STATE__ JSON object
 _STATE_PATTERN = re.compile(r"window\.__STATE__\s*=\s*(\{.*?\})\s*(?:;|</script>)", re.DOTALL)
+_DATA_PATTERN = re.compile(r"vtex-data\s*=\s*(\{.*?\})\s*(?:;|</script>)", re.DOTALL)
 
 
 class VtexExtractor(GenericHtmlExtractor):
@@ -73,10 +76,32 @@ class VtexExtractor(GenericHtmlExtractor):
         )
 
     def _parse_state(self) -> dict | None:
+        # 1. Try standard __STATE__
         match = _STATE_PATTERN.search(self.html)
-        if not match:
-            return None
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            return None
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        # 2. Try vtex-data (IO variant)
+        match_data = _DATA_PATTERN.search(self.html)
+        if match_data:
+            try:
+                return json.loads(match_data.group(1))
+            except json.JSONDecodeError:
+                pass
+        
+        # 3. Last resort: Find all script tags that look like JSON
+        for script in self.selector.css("script"):
+            content = script.text
+            if "__STATE__" in content or "vtex-data" in content:
+                try:
+                    # Rough extraction of JSON from script
+                    json_match = re.search(r"(\{.*\})", content, re.DOTALL)
+                    if json_match:
+                        return json.loads(json_match.group(1))
+                except Exception:
+                    continue
+
+        return None

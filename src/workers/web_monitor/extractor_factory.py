@@ -22,6 +22,7 @@ from workers.web_monitor.extractors.base import BaseExtractor
 from workers.web_monitor.extractors.generic_html import GenericHtmlExtractor
 from workers.web_monitor.extractors.magento import MagentoExtractor
 from workers.web_monitor.extractors.prestashop import PrestashopExtractor
+from workers.web_monitor.extractors.salesforce import SalesforceExtractor
 from workers.web_monitor.extractors.shopify import ShopifyExtractor
 from workers.web_monitor.extractors.tiendanube import TiendanubeExtractor
 from workers.web_monitor.extractors.vtex import VtexExtractor
@@ -39,6 +40,7 @@ _EXTRACTOR_REGISTRY: dict[EcommercePlatform, type[BaseExtractor]] = {
     EcommercePlatform.TIENDANUBE: TiendanubeExtractor,
     EcommercePlatform.WOOCOMMERCE: WooCommerceExtractor,
     EcommercePlatform.PRESTASHOP: PrestashopExtractor,
+    EcommercePlatform.SALESFORCE: SalesforceExtractor,
 }
 
 

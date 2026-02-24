@@ -56,6 +56,12 @@ _PLATFORM_SIGNATURES: dict[EcommercePlatform, list[tuple[str, str]]] = {
         ("html", r"PrestaShop"),
         ("html", r"prestashop/js"),
     ],
+    EcommercePlatform.SALESFORCE: [
+        ("html", r"demandware\.store"),
+        ("html", r"dw\.ac"),
+        ("html", r"sfcc:true"),
+        ("html", r"demandware\.edgesuite"),
+    ],
 }
 
 

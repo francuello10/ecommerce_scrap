@@ -13,6 +13,7 @@ class EcommercePlatform(StrEnum):
     SHOPIFY = "SHOPIFY"
     MAGENTO = "MAGENTO"
     MAGENTO2 = "MAGENTO"  # alias — Magento 2.x uses same value
+    SALESFORCE = "SALESFORCE"
     TIENDANUBE = "TIENDANUBE"
     WOOCOMMERCE = "WOOCOMMERCE"
     PRESTASHOP = "PRESTASHOP"

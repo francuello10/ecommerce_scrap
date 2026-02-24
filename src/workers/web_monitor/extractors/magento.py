@@ -20,6 +20,18 @@ class MagentoExtractor(GenericHtmlExtractor):
     async def extract_all(self) -> ExtractionResult:
         result = await super().extract_all()
         result.platform_detected = EcommercePlatform.MAGENTO
-        # TODO Phase 3: Extract from .price-box, .price--special
-        # TODO Phase 3: Extract installments from .installment-block
+        
+        # Use scrapling for fast selector-based enrichment
+        # Price box
+        prices = self.selector.css(".price-box")
+        if prices:
+            price_text = prices[0].text
+            if price_text:
+                result.raw_metadata["price_box"] = price_text
+
+        # Installments
+        insts = self.selector.css(".installment-block, .product-item-details .installments")
+        if insts:
+            result.raw_metadata["installments_ui"] = insts[0].text
+
         return result

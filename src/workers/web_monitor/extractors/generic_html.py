@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import logging
 import re
-
 from bs4 import BeautifulSoup
+from scrapling import Selector
 
 from workers.web_monitor.extractors.base import BaseExtractor
 from workers.web_monitor.models import (
@@ -117,6 +117,7 @@ class GenericHtmlExtractor(BaseExtractor):
     def __init__(self, html: str, headers: dict[str, str]) -> None:
         super().__init__(html, headers)
         self.soup = BeautifulSoup(html, "html.parser")
+        self.selector = Selector(html)
         self._platform = EcommercePlatform.UNKNOWN
 
     # ── Public interface (required by BaseExtractor) ───────────────────

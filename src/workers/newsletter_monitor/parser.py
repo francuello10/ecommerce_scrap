@@ -65,27 +65,44 @@ class NewsletterParser:
     def _add_signals_from_text(self, text: str, source: str, signals: list[DetectedSignal]) -> None:
         """Helper to find promos and financing in a snippet of text."""
         # -- Discount detection --
-        # 20% OFF, 2x1, 3x2, etc.
-        promo_match = re.search(r"(\d{1,3}%\s*off|\d\s*x\s*\d|hasta\s*\d{1,3}%\s*desc)", text, re.I)
-        if promo_match:
-            signals.append(DetectedSignal(
-                raw_text_found=text,
-                source_type=SignalType.PROMO,
-                metadata_json={"source_origin": source, "detected_pattern": promo_match.group(0)}
-            ))
+        # 20% OFF, 2x1, 3x2, hasta 50% desc, etc.
+        promo_patterns = [
+            r"\d{1,3}%\s*(?:off|desc|descuento|ahorro|dscto)",
+            r"\d\s*x\s*\d",
+            r"(?:promo|oferta|liquidaci[oó]n|sale|hot\s*sale)",
+            r"2do\s+al\s+\d{1,3}%",
+            r"llev[at]\s*\d\s*pag[at]\s*\d"
+        ]
+        for pattern in promo_patterns:
+            match = re.search(pattern, text, re.I)
+            if match:
+                signals.append(DetectedSignal(
+                    raw_text_found=text,
+                    source_type=SignalType.PROMO,
+                    metadata_json={"source_origin": source, "detected_pattern": match.group(0)}
+                ))
+                break
 
         # -- Financing detection --
-        # 3 cuotas, 6 sin interés, etc.
-        fin_match = re.search(r"(\d{1,2}\s*cuotas|sin\s*inter[eé]s)", text, re.I)
-        if fin_match:
-            signals.append(DetectedSignal(
-                raw_text_found=text,
-                source_type=SignalType.FINANCIACION,
-                metadata_json={"source_origin": source, "detected_pattern": fin_match.group(0)}
-            ))
+        # 3 cuotas, 6 sin interés, Plan Z, etc.
+        fin_patterns = [
+            r"\d{1,2}\s*cuotas",
+            r"sin\s*inter[eé]s",
+            r"(?:visa|mastercard|amex|naranja|cabal)",
+            r"ahora\s*\d{1,2}"
+        ]
+        for pattern in fin_patterns:
+            match = re.search(pattern, text, re.I)
+            if match:
+                signals.append(DetectedSignal(
+                    raw_text_found=text,
+                    source_type=SignalType.FINANCIACION,
+                    metadata_json={"source_origin": source, "detected_pattern": match.group(0)}
+                ))
+                break
 
         # -- Shipping detection --
-        ship_match = re.search(r"(env[ií]o\s*grat[ií]s|gratis\s*a\s*todo\s*el\s*pa[ií]s)", text, re.I)
+        ship_match = re.search(r"(env[ií]o\s*grat[ií]s|gratis\s*a\s*todo\s*el\s*pa[ií]s|entrega\s*sin\s*cargo)", text, re.I)
         if ship_match:
             signals.append(DetectedSignal(
                 raw_text_found=text,
