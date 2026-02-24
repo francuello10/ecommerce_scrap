@@ -282,42 +282,43 @@ async def run_web_monitor(ctx: dict) -> dict:
     ARQ job entry point.
     Fetches and processes all active monitored pages.
     """
-    session: AsyncSession = ctx["session"]
+    from core.database import async_session_factory
+    
+    async with async_session_factory() as session:
+        # Create a CrawlRun to group this execution
+        run = CrawlRun(started_at=datetime.now(timezone.utc))
+        session.add(run)
+        await session.flush()
+        logger.info("🕷️  CrawlRun #%d started", run.id)
 
-    # Create a CrawlRun to group this execution
-    run = CrawlRun(started_at=datetime.now(timezone.utc))
-    session.add(run)
-    await session.flush()
-    logger.info("🕷️  CrawlRun #%d started", run.id)
-
-    # Fetch all active monitored pages for ACTIVE competitors
-    result = await session.execute(
-        select(MonitoredPage)
-        .join(MonitoredPage.competitor)
-        .where(
-            MonitoredPage.is_active == True,
+        # Fetch all active monitored pages for ACTIVE competitors
+        result = await session.execute(
+            select(MonitoredPage)
+            .join(MonitoredPage.competitor)
+            .where(
+                MonitoredPage.is_active == True,
+            )
+            .order_by(MonitoredPage.competitor_id, MonitoredPage.id)
         )
-        .order_by(MonitoredPage.competitor_id, MonitoredPage.id)
-    )
-    pages = result.scalars().all()
-    logger.info("  Found %d active pages to monitor", len(pages))
+        pages = result.scalars().all()
+        logger.info("  Found %d active pages to monitor", len(pages))
 
-    successes = 0
-    failures = 0
-    for page in pages:
-        success = await process_monitored_page(session, page, run.id)
-        if success:
-            successes += 1
-        else:
-            failures += 1
+        successes = 0
+        failures = 0
+        for page in pages:
+            success = await process_monitored_page(session, page, run.id)
+            if success:
+                successes += 1
+            else:
+                failures += 1
 
-    # Finalize run
-    run.ended_at = datetime.now(timezone.utc)
-    run.status = JobStatus.SUCCESS if failures == 0 else JobStatus.FAILED_PARTIAL
-    await session.commit()
+        # Finalize run
+        run.ended_at = datetime.now(timezone.utc)
+        run.status = JobStatus.SUCCESS if failures == 0 else JobStatus.FAILED_PARTIAL
+        await session.commit()
 
-    logger.info(
-        "🏁 CrawlRun #%d finished — %d success, %d failures",
-        run.id, successes, failures,
-    )
-    return {"successes": successes, "failures": failures, "run_id": run.id}
+        logger.info(
+            "🏁 CrawlRun #%d finished — %d success, %d failures",
+            run.id, successes, failures,
+        )
+        return {"successes": successes, "failures": failures, "run_id": run.id}
