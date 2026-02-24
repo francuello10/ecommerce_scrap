@@ -41,8 +41,9 @@
 
 ## 3. Tablas de Catálogo (Fase 2 / Preparación)
 
-- `product` (id, competitor_id FK, sku, url, brand, title, category_path, is_active, first_seen_at)
-- `price_history` (id, product_id FK, snapshot_id FK, list_price, sale_price, currency, is_in_stock, recorded_at)
+- `product` (id, competitor_id FK, sku, url, brand, title, description, images JSONB, category_path, category_tree JSONB, financing_options JSONB, discovered_from, rating_avg DECIMAL, review_count INT, badges JSONB, is_active, first_seen_at)
+- `product_variant` (id, product_id FK, sku, title, is_in_stock, list_price, sale_price, raw_metadata JSONB, created_at, updated_at)
+- `price_history` (id, product_id FK, snapshot_id FK, product_variant_id FK, list_price, sale_price, currency, is_in_stock, recorded_at)
 
 ---
 

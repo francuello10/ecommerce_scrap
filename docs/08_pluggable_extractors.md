@@ -71,6 +71,11 @@ async def extract_hero_banner(self, html: str) -> HeroBanner | None
 @abstractmethod
 async def extract_ctas(self, html: str) -> list[CallToAction]
 
+@abstractmethod
+async def extract_products(self) -> list[ProductData]:
+    """Extrae datos de catálogo: SKU, precio, stock, descripción, imágenes (PRO)."""
+
+@abstractmethod
 async def extract_all(self, html: str) -> ExtractionResult:
     """Orquesta todos los sub-extractores y devuelve el resultado consolidado."""
 ```

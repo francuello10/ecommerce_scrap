@@ -37,6 +37,7 @@ En un mercado de eCommerce saturado, la velocidad de reacción es el mayor activ
 ### 🕷️ Web Monitoring (Powered by Scrapling 0.4)
 - **High-Performance Parsing**: Motor de crawling ultrarrápido con **Scrapling**, reduciendo el overhead de procesamiento en un 40%.
 - **Platform-aware scraping**: Detección automática y extractores nativos para VTEX IO, Shopify, Magento 2, TiendaNube, WooCommerce, PrestaShop y Salesforce Commerce Cloud (SFCC).
+- **Deluxe Product & CRO Intelligence *(NEW)***: Captura de contenido enriquecido (descripciones, galerías de imágenes full), social proof (ratings, review counts), badges de marketing (NUEVO, BEST SELLER) y trazabilidad de origen.
 - **Signal extraction**: Promociones (% OFF, 2x1, combos), financiación (cuotas sin interés, bancos), CTAs, hero banners.
 - **Auto-discovery**: Escaneo de header/footer para descubrir páginas clave (promos, financiación, envíos)
 - **Dual capture**: Screenshots con y sin popups + HTML para análisis full-context
@@ -198,7 +199,7 @@ make format         # ✨ Formatear código
 | **Config** | `competitor`, `monitored_page`, `newsletter_account`, `newsletter_subscription` | Configuración editable desde Directus |
 | **Raw Data** | `page_snapshot`, `newsletter_message`, `job_execution_log` | Datos crudos para análisis |
 | **Tech** | `competitor_tech_profile`, `tech_profile_history`, `tech_profile_change` | Fingerprinting tecnológico |
-| **Catalog** | `product`, `price_history` | Tracking de SKU, Precios y Stock |
+| **Catalog** | `product`, `product_variant`, `price_history` | Tracking de SKU, Precios, Stock, Contenido Premium y CRO |
 | **Signals** | `detected_signal`, `change_event` | Hallazgos comerciales detectados |
 
 ---

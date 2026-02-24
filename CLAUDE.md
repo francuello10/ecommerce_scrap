@@ -22,7 +22,7 @@ ecommerce_scrap/
 │   ├── core/
 │   │   ├── config.py          # Settings (pydantic-settings). Lee el .env.
 │   │   ├── database.py        # Engine async SQLAlchemy + Base + get_db()
-│   │   ├── models.py          # TODOS los modelos ORM (23 tablas)
+│   │   ├── models.py          # TODOS los modelos ORM (25+ tablas)
 │   │   └── notifications/
 │   │       └── slack.py       # Sender de alertas Slack (httpx async)
 │   ├── api/
