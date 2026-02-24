@@ -32,9 +32,10 @@ from core.models import (
     SignalType,
     PageType,
     Product,
+    ProductVariant,
     PriceHistory,
 )
-from workers.web_monitor.models import ProductData
+from workers.web_monitor.models import ProductData, VariantData
 from workers.web_monitor.platform_detector import PlatformDetector
 from workers.web_monitor.extractor_factory import ExtractorFactory
 from workers.tech_fingerprint.fingerprinter import TechFingerprinter
@@ -115,7 +116,7 @@ async def process_monitored_page(
     logger.info("  Platform detected: %s", platform)
 
     # 4. Get extractor and extract signals
-    extractor = ExtractorFactory.create(platform, html, headers)
+    extractor = ExtractorFactory.create(platform, html, headers, page.url)
     result = await extractor.extract_all()
     logger.info(
         "  Extracted: %d promos, %d financing, %d CTAs",
@@ -157,10 +158,10 @@ async def process_monitored_page(
         signals_saved += 1
 
     # 6. Save Catalog Data (if extracted)
-    product_data = await extractor.extract_product()
-    if product_data:
-        await _save_product_data(session, page, snapshot.id, product_data)
-        logger.info("  Catalog data saved for SKU: %s", product_data.sku)
+    if result.products:
+        for product_data in result.products:
+            await _save_product_data(session, page, snapshot.id, product_data)
+        logger.info("  Catalog data saved for %d products", len(result.products))
 
     # 7. Mark snapshot as extracted
     snapshot.status = SnapshotStatus.EXTRACTED
@@ -186,24 +187,39 @@ async def _save_product_data(
     snapshot_id: int,
     data: ProductData,
 ) -> None:
-    """Save/Update product and add price history entry."""
+    """Save/Update product, its variants, and add price history entry."""
     # 1. Ensure Product exists
-    res = await session.execute(
-        select(Product).where(
+    # If we have a SKU, use SKU + competitor_id. Otherwise fallback to URL.
+    if data.sku:
+        stmt = select(Product).where(
             Product.competitor_id == page.competitor_id,
-            Product.sku == data.sku if data.sku else Product.url == page.url
+            Product.sku == data.sku
         )
-    )
+    else:
+        stmt = select(Product).where(
+            Product.competitor_id == page.competitor_id,
+            Product.url == page.url
+        )
+    
+    res = await session.execute(stmt)
     product = res.scalar_one_or_none()
     
     if not product:
         product = Product(
             competitor_id=page.competitor_id,
             sku=data.sku,
-            url=page.url,
+            url=page.url if not data.url else data.url,
             brand=data.brand,
             title=data.title,
             category_path=data.category_path,
+            category_tree=data.category_tree,
+            description=data.description,
+            images=data.images,
+            financing_options={"installments": data.installments} if data.installments else None,
+            discovered_from=data.source_url or page.url,
+            rating_avg=data.rating,
+            review_count=data.review_count,
+            badges=data.badges,
         )
         session.add(product)
         await session.flush()
@@ -212,9 +228,44 @@ async def _save_product_data(
         product.title = data.title or product.title
         product.brand = data.brand or product.brand
         product.category_path = data.category_path or product.category_path
+        product.category_tree = data.category_tree or product.category_tree
+        product.description = data.description or product.description
+        product.images = data.images or product.images
+        product.financing_options = {"installments": data.installments} if data.installments else product.financing_options
+        product.discovered_from = data.source_url or product.discovered_from or page.url
+        product.rating_avg = data.rating or product.rating_avg
+        product.review_count = data.review_count or product.review_count
+        product.badges = data.badges or product.badges
         product.is_active = True
 
-    # 2. Add Price History
+    # 2. Save Variants (if any)
+    if data.variants:
+        for v_data in data.variants:
+            v_stmt = select(ProductVariant).where(
+                ProductVariant.product_id == product.id,
+                ProductVariant.sku == v_data.sku
+            )
+            v_res = await session.execute(v_stmt)
+            variant = v_res.scalar_one_or_none()
+            
+            if not variant:
+                variant = ProductVariant(
+                    product_id=product.id,
+                    sku=v_data.sku,
+                    title=v_data.title,
+                    is_in_stock=v_data.is_in_stock,
+                    list_price=v_data.list_price,
+                    sale_price=v_data.sale_price,
+                    raw_metadata=v_data.raw_metadata
+                )
+                session.add(variant)
+            else:
+                variant.title = v_data.title or variant.title
+                variant.is_in_stock = v_data.is_in_stock
+                variant.list_price = v_data.list_price or variant.list_price
+                variant.sale_price = v_data.sale_price or variant.sale_price
+
+    # 3. Add Price History (Main Product)
     history = PriceHistory(
         product_id=product.id,
         snapshot_id=snapshot_id,

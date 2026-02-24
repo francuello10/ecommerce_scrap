@@ -58,6 +58,7 @@ class ExtractorFactory:
         platform: EcommercePlatform,
         html: str,
         headers: dict[str, str],
+        url: str | None = None,
     ) -> BaseExtractor:
         """
         Instantiate the extractor for the given platform.
@@ -72,7 +73,7 @@ class ExtractorFactory:
                 "No specific extractor for platform=%s, falling back to GenericHtmlExtractor.",
                 platform,
             )
-            return GenericHtmlExtractor(html, headers)
+            return GenericHtmlExtractor(html, headers, url)
 
         logger.info("Using %s for platform=%s.", extractor_cls.__name__, platform)
-        return extractor_cls(html, headers)
+        return extractor_cls(html, headers, url)

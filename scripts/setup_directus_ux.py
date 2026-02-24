@@ -75,6 +75,34 @@ async def setup_ux():
                         {"background": "#0d6efd", "text": "white", "value": "LOW"}
                     ]
                 }
+            }},
+            # Catalog — Product
+            {"collection": "product", "field": "variants", "meta": {
+                "interface": "list-m2m", # Directus uses this for O2M as well in many cases
+                "display": "related-values"
+            }},
+            # Catalog — Variants
+            {"collection": "product_variant", "field": "is_in_stock", "meta": {
+                "interface": "boolean",
+                "display": "boolean"
+            }},
+            {"collection": "product_variant", "field": "sale_price", "meta": {
+                "interface": "input",
+                "display": "currency",
+                "display_options": {"symbol": "$", "suffix": True}
+            }},
+            # Premium Fields
+            {"collection": "product", "field": "description", "meta": {
+                "interface": "markdown",
+                "display": "formatted-text"
+            }},
+            {"collection": "product", "field": "images", "meta": {
+                "interface": "list",
+                "display": "raw"
+            }},
+            {"collection": "product", "field": "category_tree", "meta": {
+                "interface": "list",
+                "display": "raw"
             }}
         ]
 

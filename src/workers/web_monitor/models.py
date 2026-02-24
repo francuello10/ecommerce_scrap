@@ -77,6 +77,17 @@ class CallToAction:
 
 
 @dataclass(frozen=True, slots=True)
+class VariantData:
+    """A specific variant of a product (size, color, etc.)."""
+    sku: str | None = None
+    title: str | None = None      # e.g. "42", "Rojo"
+    is_in_stock: bool = True
+    list_price: float | None = None
+    sale_price: float | None = None
+    raw_metadata: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class ProductData:
     """Structured product data for Catalog Intelligence."""
 
@@ -89,7 +100,16 @@ class ProductData:
     sale_price: float | None = None
     currency: str = "ARS"
     image_url: str | None = None
+    images: list[str] = field(default_factory=list)
+    description: str | None = None
     is_in_stock: bool = True
+    variants: list[VariantData] = field(default_factory=list)
+    category_tree: list[str] = field(default_factory=list)
+    installments: str | None = None
+    source_url: str | None = None
+    rating: float | None = None
+    review_count: int | None = None
+    badges: list[str] = field(default_factory=list)
     raw_metadata: dict[str, str] = field(default_factory=dict)
 
 
@@ -102,5 +122,10 @@ class ExtractionResult:
     financing: list[FinancingSignal] = field(default_factory=list)
     hero_banner: HeroBanner | None = None
     ctas: list[CallToAction] = field(default_factory=list)
-    product_data: ProductData | None = None
+    products: list[ProductData] = field(default_factory=list)
     raw_metadata: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def product_data(self) -> ProductData | None:
+        """Compatibility property for single-product extractors."""
+        return self.products[0] if self.products else None

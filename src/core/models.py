@@ -616,11 +616,41 @@ class Product(Base):
     brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
     title: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     category_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    category_tree: Mapped[list | None] = mapped_column(JSONB, nullable=True) # Full hierarchy
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    images: Mapped[list | None] = mapped_column(JSONB, nullable=True) # Multiple URLs
+    financing_options: Mapped[dict | None] = mapped_column(JSONB, nullable=True) # 12 cuotas, etc.
+    discovered_from: Mapped[str | None] = mapped_column(String(2048), nullable=True) # URL where found (grid/list)
+    rating_avg: Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
+    review_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    badges: Mapped[list | None] = mapped_column(JSONB, nullable=True) # ["NUEVO", "BEST SELLER"]
+    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True) # Generic catch-all
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
+    variants: Mapped[list["ProductVariant"]] = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
     price_history: Mapped[list["PriceHistory"]] = relationship("PriceHistory", back_populates="product")
+
+
+class ProductVariant(Base):
+    """
+    A specific variation of a product (e.g., Size: 42, Color: Red).
+    """
+    __tablename__ = "product_variant"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("product.id"), nullable=False)
+    sku: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True) # e.g. "42", "XL", "Rojo"
+    is_in_stock: Mapped[bool] = mapped_column(Boolean, default=True)
+    list_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    sale_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    raw_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    product: Mapped["Product"] = relationship("Product", back_populates="variants")
 
 
 class PriceHistory(Base):

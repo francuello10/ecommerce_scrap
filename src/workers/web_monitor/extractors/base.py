@@ -20,9 +20,10 @@ class BaseExtractor(ABC):
     - All methods are async for Playwright compatibility.
     """
 
-    def __init__(self, html: str, headers: dict[str, str]) -> None:
+    def __init__(self, html: str, headers: dict[str, str], url: str | None = None) -> None:
         self.html = html
         self.headers = headers
+        self.url = url
 
     @abstractmethod
     async def extract_all(self) -> ExtractionResult:
