@@ -103,7 +103,7 @@ class ImapReader:
         msg: MailMessage,
         competitor_id: int,
     ) -> NewsletterMessage | None:
-        """Save a newsletter message to the database."""
+        """Save a newsletter message to the database and filesystem."""
         # Check for duplicates by subject + date
         existing = await session.execute(
             select(NewsletterMessage).where(
@@ -115,6 +115,17 @@ class ImapReader:
         if existing.scalar_one_or_none():
             return None
 
+        # Save HTML body to storage/newsletters/
+        from pathlib import Path
+        import uuid
+        
+        storage_dir = Path("storage/newsletters")
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_name = f"{uuid.uuid4()}.html"
+        file_path = storage_dir / file_name
+        file_path.write_text(msg.html, encoding="utf-8")
+
         is_optin = self._is_optin_email(msg)
 
         newsletter_msg = NewsletterMessage(
@@ -124,6 +135,7 @@ class ImapReader:
             subject=msg.subject,
             received_at=msg.date,
             is_optin_confirmation=is_optin,
+            raw_html_path=str(file_path),
             status="RECEIVED",
         )
         session.add(newsletter_msg)

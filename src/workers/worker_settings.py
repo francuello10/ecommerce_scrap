@@ -7,6 +7,7 @@ Usage:
 
 from __future__ import annotations
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from core.config import settings
@@ -107,9 +108,9 @@ class WorkerSettings:
     # Cron schedule
     cron_jobs = [
         # Web monitor: every 4 hours
-        # cron(run_web_monitor, hour={0, 4, 8, 12, 16, 20}),
+        cron(run_web_monitor, hour={0, 4, 8, 12, 16, 20}),
         # Newsletter: every 6 hours
-        # cron(run_newsletter_reader, hour={6, 12, 18, 0}),
+        cron(run_newsletter_reader, hour={6, 12, 18, 0}),
         # Daily brief: every day at 7 AM
-        # cron(run_daily_brief, hour={7}, minute={0}),
+        cron(run_daily_brief, hour={7}, minute={0}),
     ]
