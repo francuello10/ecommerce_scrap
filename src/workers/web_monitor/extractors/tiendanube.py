@@ -20,6 +20,14 @@ class TiendanubeExtractor(GenericHtmlExtractor):
     async def extract_all(self) -> ExtractionResult:
         result = await super().extract_all()
         result.platform_detected = EcommercePlatform.TIENDANUBE
-        # TODO Phase 3: Extract from window.LS.product / window.LS.cart
-        # TODO Phase 3: Extract installments from .js-installments
+        
+        # Tiendanube / Nuvemshop specific
+        prices = self.selector.css(".js-price-display, #price_display")
+        if prices:
+            result.raw_metadata["price_ui"] = prices[0].text
+            
+        installments = self.selector.css(".js-installments-credit-card, .js-max-installments-container")
+        if installments:
+             result.raw_metadata["installments_ui"] = installments[0].text
+
         return result

@@ -34,20 +34,21 @@ graph LR
 ```
 
 ## 3. Arquitectura de Datos (CTO View)
-Estructura de "Raw to Brief" para asegurar trazabilidad.
+Estructura de "Raw to Brief" para asegurar trazabilidad y performance extrema.
 
 ```mermaid
 sequenceDiagram
     participant W as Worker (HTTPX/PW)
+    participant S as Scrapling (Turbo Parser)
     participant DB as PostgreSQL (Raw)
     participant D as Diff Engine
     participant LLM as AI Briefing Engine
-    participant U as User (Directus)
 
     W->>DB: Save Snapshot & Newsletter
+    W->>S: High-speed extraction (Selector)
+    S->>DB: Save Structured Signals (TODO TODO)
     DB->>D: Analyze Signals (Taxonomy)
     D->>DB: Save Change Events
-    DB->>LLM: Fetch daily changes
+    DB->>LLM: Fetch daily changes (Gemini/GPT)
     LLM->>DB: Save Executive Brief (MD/JSON)
-    U->>DB: Inspect Signals & Brief
 ```

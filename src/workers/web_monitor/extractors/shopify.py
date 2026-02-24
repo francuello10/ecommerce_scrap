@@ -30,13 +30,13 @@ class ShopifyExtractor(GenericHtmlExtractor):
         if meta:
             logger.debug("Shopify meta found")
 
-        # Try JSON-LD structured data
-        for script in self.soup.find_all("script", type="application/ld+json"):
+        # Use scrapling for structured data extraction
+        for script in self.selector.css("script[type='application/ld+json']"):
             try:
-                data = json.loads(script.string or "")
+                data = script.json
                 if isinstance(data, dict) and data.get("@type") == "Product":
                     logger.debug("Shopify Product JSON-LD found")
-            except (json.JSONDecodeError, AttributeError):
+            except Exception:
                 pass
 
         return result

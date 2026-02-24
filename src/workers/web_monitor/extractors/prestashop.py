@@ -20,6 +20,14 @@ class PrestashopExtractor(GenericHtmlExtractor):
     async def extract_all(self) -> ExtractionResult:
         result = await super().extract_all()
         result.platform_detected = EcommercePlatform.PRESTASHOP
-        # TODO Phase 3: Extract .regular-price vs .current-price for discount detection
-        # TODO Phase 3: Extract installments from .payment-block
+        
+        # PrestaShop selectors
+        current_price = self.selector.css(".current-price, .product-price")
+        regular_price = self.selector.css(".regular-price")
+        
+        if current_price:
+            result.raw_metadata["price_current"] = current_price[0].text
+        if regular_price:
+            result.raw_metadata["price_regular"] = regular_price[0].text
+
         return result

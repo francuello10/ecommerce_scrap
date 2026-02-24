@@ -101,14 +101,19 @@ db-seed-industries: ## 🏭 Inserta rubros y sugerencias de competidores (Sugges
 db-seed-ai: ## 🌱 Insertar configuración de IA (prompts y modelos)
 	PYTHONPATH=src uv run python scripts/seed_ai_settings.py
 
-db-setup-all: ## 🚀 Setup completo: upgrade + seed-tiers + seed-data + seed-industries + seed-ai.
+db-setup-directus-ux: ## 🎨 Configura automáticamente la UI de Directus (Interfaces, Displays).
+	@echo "$(GREEN)▶ Configurando UX de Directus...$(RESET)"
+	PYTHONPATH=src uv run python scripts/setup_directus_ux.py
+
+db-setup-all: ## 🚀 Setup completo: upgrade + seed + UX setup.
 	@echo "$(GREEN)▶ Iniciando setup completo de la base de datos...$(RESET)"
 	$(MAKE) db-upgrade
 	$(MAKE) db-seed
 	$(MAKE) db-seed-data
 	$(MAKE) db-seed-industries
 	$(MAKE) db-seed-ai
-	@echo "$(GREEN)✅ Base de datos lista para usar.$(RESET)"
+	$(MAKE) db-setup-directus-ux
+	@echo "$(GREEN)✅ Sistema listo para operar.$(RESET)"
 
 # ──────────────────────────────────────────────────────────────────────
 # 🏃 EJECUCIÓN

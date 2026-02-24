@@ -20,6 +20,14 @@ class WooCommerceExtractor(GenericHtmlExtractor):
     async def extract_all(self) -> ExtractionResult:
         result = await super().extract_all()
         result.platform_detected = EcommercePlatform.WOOCOMMERCE
-        # TODO Phase 3: Extract .woocommerce-Price-amount for prices
-        # TODO Phase 3: Extract .woo-variation-price for promos
+        
+        # WooCommerce specific selectors
+        prices = self.selector.css(".woocommerce-Price-amount, .price ins .amount")
+        if prices:
+            result.raw_metadata["price_ui"] = prices[0].text
+            
+        promos = self.selector.css(".onsale, .woo-variation-price")
+        if promos:
+            result.raw_metadata["promo_ui"] = promos[0].text
+
         return result
