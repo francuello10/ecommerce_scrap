@@ -20,7 +20,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from workers.web_monitor.base import BaseExtractor
+from workers.web_monitor.extractors.base import BaseExtractor
 from workers.web_monitor.models import (
     CallToAction,
     ExtractionResult,

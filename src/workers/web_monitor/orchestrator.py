@@ -29,10 +29,14 @@ from core.models import (
     JobStatus,
     DetectedSignal,
     SignalSource,
-    SignalTaxonomy,
+    SignalType,
+    PageType,
 )
 from workers.web_monitor.platform_detector import PlatformDetector
 from workers.web_monitor.extractor_factory import ExtractorFactory
+from workers.tech_fingerprint.fingerprinter import TechFingerprinter
+from workers.diff_engine.analyzer import analyze_changes
+
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +156,18 @@ async def process_monitored_page(
     # 6. Mark snapshot as extracted
     snapshot.status = SnapshotStatus.EXTRACTED
     logger.info("  Saved %d signals for snapshot #%d", signals_saved, snapshot.id)
+
+    # 7. Run Tech Fingerprinting (if homepage)
+    if page.page_type == PageType.HOMEPAGE:
+        fingerprinter = TechFingerprinter()
+        await fingerprinter.fingerprint_competitor(session, page.competitor_id, page.url, html=html)
+        logger.info("  Fingerprinted tech stack for competitor %d", page.competitor_id)
+
+    # 8. Run Diff Engine to detect changes
+    events = await analyze_changes(session, page)
+    if events:
+        logger.info("  Diff Engine detected %d changes", len(events))
+
     return True
 
 
