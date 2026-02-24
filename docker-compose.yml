@@ -1,0 +1,86 @@
+services:
+  # ────────────────────────────────────────────────────────────────────
+  # PostgreSQL 16 — Base de datos principal
+  # ────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: intel_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-intel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-intel_dev_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-competitive_intel}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-intel}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ────────────────────────────────────────────────────────────────────
+  # Redis 7.2 — Broker para ARQ (workers de background)
+  # ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: intel_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ────────────────────────────────────────────────────────────────────
+  # Directus 11 — Panel de administración / Backoffice
+  # ────────────────────────────────────────────────────────────────────
+  directus:
+    image: directus/directus:11
+    container_name: intel_directus
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${DIRECTUS_PORT:-8055}:8055"
+    environment:
+      KEY: ${DIRECTUS_KEY:-directus-dev-key-change-me}
+      SECRET: ${DIRECTUS_SECRET:-directus-dev-secret-change-me}
+
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-competitive_intel}
+      DB_USER: ${POSTGRES_USER:-intel}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-intel_dev_2026}
+
+      CACHE_ENABLED: "true"
+      CACHE_STORE: redis
+      REDIS: redis://redis:6379/1
+
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL:-admin@intel.com}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD:-admin_dev_2026}
+
+      # SSO — Google (Reutilizando credenciales del legacy)
+      AUTH_PROVIDERS: google
+      AUTH_GOOGLE_DRIVER: openid
+      AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      AUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
+    volumes:
+      - directus_uploads:/directus/uploads
+      - directus_extensions:/directus/extensions
+
+volumes:
+  postgres_data:
+  redis_data:
+  directus_uploads:
+  directus_extensions:

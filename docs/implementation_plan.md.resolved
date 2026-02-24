@@ -1,0 +1,210 @@
+# Plan de Implementación Definitivo: Competitive Intelligence Engine (MVP)
+
+*Versión final. Basado en los documentos 01–10 y el SRS actualizado.*
+
+> [!IMPORTANT]
+> Los planes de suscripción y sus feature flags se configuran 100% desde Directus editando la tabla `subscription_tier`. No hay valores hardcodeados.
+
+---
+
+## Fase 0 — Infraestructura Base (Día 1–2)
+
+### Objetivo
+Levantar el entorno local completo con Docker y tener un proyecto Python inicializado con `uv`.
+
+### Entregables
+
+#### [NEW] [docker-compose.yml](file:///home/fran/projects/ecommerce_scrap/v0-newsletterAI/docker-compose.yml)
+- PostgreSQL 16, Redis 7.2, Directus 11 (conectado a Postgres).
+- Variables de entorno: `DB_URL`, `REDIS_URL`, `DIRECTUS_KEY`, `DIRECTUS_SECRET`.
+
+#### [NEW] `pyproject.toml`
+- Inicializado con `uv init`. Dependencias de [docs/05_stack_versions.md](file:///home/fran/projects/ecommerce_scrap/docs/05_stack_versions.md).
+
+#### [NEW] [Makefile](file:///home/fran/projects/ecommerce_scrap/Makefile)
+- Task runner auto-documentado (ya creado). Contiene todos los shortcuts:
+  - `make up` / `make down` → Levantar/apagar servicios Docker.
+  - `make install` → Instalar dependencias con `uv`.
+  - `make db-upgrade` / `make db-migrate` → Migraciones de Alembic.
+  - `make api` / `make worker` → Levantar FastAPI y ARQ.
+  - `make test` / `make lint` / `make format` → Calidad de código.
+  - `make help` → Lista todos los comandos con descripción.
+
+#### [NEW] [.env.example](file:///home/fran/projects/ecommerce_scrap/v0-newsletterAI/.env.example)
+- Template de variables de entorno para copiar.
+
+#### [NEW] Estructura base del proyecto
+```
+src/
+├── core/
+│   ├── config.py             # pydantic-settings
+│   ├── database.py           # async engine + session
+│   └── notifications/
+│       └── slack.py           # webhook sender
+├── api/
+│   ├── main.py               # FastAPI app
+│   └── routes/
+├── workers/
+│   ├── worker_settings.py    # ARQ WorkerSettings
+│   └── web_monitor/          # ya creado (skeleton)
+└── tests/
+```
+
+### Verificación
+- `make up` → los 3 servicios levantan.
+- `make install` → dependencias instaladas sin error.
+- Directus accesible en `http://localhost:8055`.
+- `make help` → muestra la lista de comandos con emojis.
+
+---
+
+## Fase 1 — Modelo de Datos + Migraciones (Día 3–5)
+
+### Objetivo
+Implementar TODOS los modelos SQLAlchemy 2.0 y correr las migraciones. Directus debe introspectar el schema sin errores.
+
+### Entregables
+
+#### [NEW] `src/core/database/models.py`
+- **SaaS:** `SubscriptionTier`, `Client`, `ClientCompetitor`, `UpsellEvent`.
+- **Config:** `Competitor`, `MonitoredPage`, `NewsletterAccount`, `NewsletterSubscription`, `SignalTaxonomy`.
+- **Raw:** `CrawlRun`, `PageSnapshot`, `NewsletterMessage`, `JobExecutionLog`.
+- **Catálogo (Fase 2 ready):** `Product`, `PriceHistory`.
+- **Resultados:** `DetectedSignal`, `ChangeEvent`.
+- **Tech:** `CompetitorTechProfile`, `TechProfileHistory`, `TechProfileChange`.
+- **Briefs:** `DailyBrief`, `WeeklyBrief`.
+
+#### [NEW] `alembic/`
+- `alembic init` + primera migración autogenerada.
+
+#### [NEW] Seed data
+- 3 registros iniciales en `subscription_tier`: BASIC, PROFESSIONAL, ENTERPRISE con sus feature flags y precios. Se insertan via migración seed o script.
+
+### Verificación
+- `alembic upgrade head` → sin errores.
+- Directus (`localhost:8055`) → las ~20 tablas aparecen introspectadas correctamente.
+- Poder crear/editar un `subscription_tier` desde Directus (pricing editable).
+- Crear un `client` y vincularlo a un tier.
+
+---
+
+## Fase 2 — Web Monitor + Platform Detection (Día 6–10)
+
+### Objetivo
+El sistema puede scrapear una homepage real, detectar la plataforma, y guardar el snapshot + señales.
+
+### Entregables
+
+#### [MODIFY] `src/workers/web_monitor/orchestrator.py`
+- Job ARQ que:
+  1. Lee `monitored_page` activas.
+  2. Verifica feature flags del tier del cliente via `client_competitor`.
+  3. Descarga HTML (HTTPX + fallback Playwright).
+  4. Enruta via [ExtractorFactory](file:///home/fran/projects/ecommerce_scrap/src/workers/web_monitor/extractor_factory.py#49-88).
+  5. Guarda `page_snapshot` + `detected_signal`.
+
+#### [MODIFY] [src/workers/web_monitor/extractors/generic_html.py](file:///home/fran/projects/ecommerce_scrap/src/workers/web_monitor/extractors/generic_html.py)
+- Implementar la lógica real: regex de promos (`\d+%\s*OFF`), cuotas (`\d+\s*cuotas`), envío gratis, CTAs.
+
+#### [NEW] `src/workers/web_monitor/discovery.py`
+- Auto-descubrimiento restringido a header/footer.
+- Selectores por plataforma (`.vtex-menu`, `#shopify-section-footer`, etc.).
+
+#### [NEW] `src/workers/tech_fingerprint/fingerprinter.py`
+- Integración con `wappalyzer-next`.
+- Lógica de diff semanal + `tech_profile_history`.
+
+### Verificación
+- Ejecutar manualmente contra `newsport.com.ar` → debe detectar VTEX, guardar snapshot.
+- `pytest tests/test_platform_detector.py` con HTML fixtures estáticos de VTEX y Shopify.
+
+---
+
+## Fase 3 — Newsletter Monitor (Día 11–14)
+
+### Objetivo
+El sistema lee emails, auto-suscribe (best-effort), confirma double opt-in, y extrae señales.
+
+### Entregables
+
+#### [NEW] `src/workers/newsletter_monitor/imap_reader.py`
+- Conexión IMAP con `imap-tools`.
+- Detección de emails de double opt-in → extracción de link → visita automática.
+- Matcheo de remitente con `competitor.domain`.
+
+#### [NEW] `src/workers/newsletter_monitor/auto_subscriber.py`
+- Worker Playwright que busca forms de newsletter en footer.
+- Best-effort: si CAPTCHA → `PENDING_MANUAL`.
+
+#### [NEW] `src/workers/newsletter_monitor/parser.py`
+- Extracción de señales (misma taxonomía que web).
+- Limpieza de HTML de Mailchimp/Klaviyo con BS4.
+
+### Verificación
+- Enviar un email de test a la casilla IMAP → el worker lo captura y parsea.
+- `pytest tests/test_newsletter_parser.py` con fixtures de emails reales anonimizados.
+
+---
+
+## Fase 4 — Diff Engine + Alertas (Día 15–17)
+
+### Objetivo
+El sistema detecta cambios entre corridas y dispara alertas Slack para cambios urgentes.
+
+### Entregables
+
+#### [NEW] `src/workers/diff_engine/analyzer.py`
+- Compara `detected_signal` actual vs anterior.
+- Asigna `severity` (LOW/MEDIUM/HIGH/CRITICAL).
+- Genera `change_event`.
+
+#### [MODIFY] `src/core/notifications/slack.py`
+- Implementar envío real de webhook.
+- Template de mensaje con emoji + contexto.
+
+### Verificación
+- Insertar 2 snapshots con señales distintas → el diff debe generar `change_event`.
+- Mockear un `CRITICAL` → verificar que el webhook Slack se dispara.
+
+---
+
+## Fase 5 — Briefing Engine (Día 18–20)
+
+### Objetivo
+Generar el brief diario en Markdown + JSON con sección "Baseline vs Competencia".
+
+### Entregables
+
+#### [NEW] `src/workers/briefing/daily_generator.py`
+- Consolida `change_event` + `newsletter_message` + `tech_profile_change` de las últimas 24h.
+- Si el cliente tiene `is_baseline = True` → sección comparativa.
+
+#### [NEW] `src/workers/briefing/weekly_generator.py`
+- Agrega daily briefs de la semana. Tendencias.
+
+### Verificación
+- Con datos de prueba en DB → generar brief → leer en Directus.
+- Verificar que el JSON es parseable y el Markdown es legible.
+
+---
+
+## Resumen de Fases
+
+| Fase | Días | Qué se logra |
+| :--- | :---: | :--- |
+| **0** Infra | 1–2 | Docker + proyecto Python funcional |
+| **1** Data Model | 3–5 | Todas las tablas en Postgres, Directus las ve, pricing editable |
+| **2** Web Monitor | 6–10 | Scraping real de homepages con platform detection |
+| **3** Newsletters | 11–14 | IMAP + auto-sub + double opt-in + parsing |
+| **4** Diff + Alertas | 15–17 | Detección de cambios + Slack webhook |
+| **5** Briefs | 18–20 | Brief diario/semanal con baseline comparison |
+
+---
+
+## Checklist Pre-Código
+
+- [ ] `docker compose up` funciona (Postgres + Redis + Directus)
+- [ ] `uv sync` instala todas las dependencias sin error
+- [ ] Directus conectado al Postgres compartido
+- [ ] Variables de entorno definidas en [.env.example](file:///home/fran/projects/ecommerce_scrap/v0-newsletterAI/.env.example)
+- [ ] Al menos 1 competidor real identificado para testing (ej. `newsport.com.ar`)

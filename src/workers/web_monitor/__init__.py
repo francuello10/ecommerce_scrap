@@ -1,0 +1,1 @@
+"""Web monitor worker package."""
