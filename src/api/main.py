@@ -12,6 +12,9 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 
+from api.routes.suggestions import router as suggestions_router
+from api.routes.onboarding import router as onboarding_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -29,6 +32,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# ── Routes ────────────────────────────────────────────────────────────
+app.include_router(suggestions_router)
+app.include_router(onboarding_router)
 
 
 @app.get("/health")

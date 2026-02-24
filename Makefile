@@ -94,6 +94,19 @@ db-seed: ## 🌱 Inserta los planes de suscripción iniciales (BASIC, PRO, ENTER
 db-seed-data: ## 📧 Inserta datos iniciales (newsletter account, taxonomías, competidor de prueba).
 	PYTHONPATH=src uv run python scripts/seed_initial_data.py
 
+.PHONY: db-seed-industries
+db-seed-industries: ## 🏀 Inserta rubros y sugerencias de competidores (Suggestion Engine).
+	PYTHONPATH=src uv run python scripts/seed_industries.py
+
+.PHONY: db-setup-all
+db-setup-all: ## 🚀 Setup completo: upgrade + seed-tiers + seed-data + seed-industries.
+	@echo "$(GREEN)▶ Iniciando setup completo de la base de datos...$(RESET)"
+	$(MAKE) db-upgrade
+	$(MAKE) db-seed
+	$(MAKE) db-seed-data
+	$(MAKE) db-seed-industries
+	@echo "$(GREEN)✅ Base de datos lista para usar.$(RESET)"
+
 # ──────────────────────────────────────────────────────────────────────
 # 🏃 EJECUCIÓN
 # ──────────────────────────────────────────────────────────────────────

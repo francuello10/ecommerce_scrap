@@ -23,6 +23,7 @@ dependencies = [
     "beautifulsoup4>=4.13.3",
     # Email
     "imap-tools>=1.7.1",
+    "email-validator>=2.2.0",
     # Tech Fingerprinting
     # NOTE: python-Wappalyzer is dated (2020). For deep fingerprinting we'll
     # build our own heuristics (PlatformDetector) + optionally install
