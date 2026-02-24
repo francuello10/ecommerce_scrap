@@ -113,11 +113,11 @@ db-setup-all: ## 🚀 Setup completo: upgrade + seed-tiers + seed-data + seed-in
 
 .PHONY: api
 api: ## 🌐 Levanta la API de FastAPI en modo desarrollo.
-	uv run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+	PYTHONPATH=src uv run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 
 .PHONY: worker
 worker: ## ⚙️  Levanta el worker de ARQ (tareas de background).
-	uv run arq src.workers.worker_settings.WorkerSettings
+	PYTHONPATH=src uv run arq src.workers.worker_settings.WorkerSettings
 
 # ──────────────────────────────────────────────────────────────────────
 # 🧪 TESTING / CALIDAD
@@ -125,11 +125,11 @@ worker: ## ⚙️  Levanta el worker de ARQ (tareas de background).
 
 .PHONY: test
 test: ## 🧪 Corre todos los tests.
-	uv run pytest tests/ -v
+	PYTHONPATH=src uv run pytest tests/ -v
 
 .PHONY: test-cov
 test-cov: ## 📊 Corre tests con reporte de cobertura.
-	uv run pytest tests/ -v --cov=src --cov-report=term-missing
+	PYTHONPATH=src uv run pytest tests/ -v --cov=src --cov-report=term-missing
 
 .PHONY: lint
 lint: ## 🔍 Chequea el código con Ruff (linter).
@@ -137,8 +137,8 @@ lint: ## 🔍 Chequea el código con Ruff (linter).
 
 .PHONY: format
 format: ## ✨ Formatea el código automáticamente con Ruff.
-	uv run ruff format src/ tests/
-	uv run ruff check --fix src/ tests/
+	PYTHONPATH=src uv run ruff format src/ tests/
+	PYTHONPATH=src uv run ruff check --fix src/ tests/
 
 # ──────────────────────────────────────────────────────────────────────
 # 🔧 UTILIDADES
@@ -146,7 +146,7 @@ format: ## ✨ Formatea el código automáticamente con Ruff.
 
 .PHONY: shell
 shell: ## 🐚 Abre una consola Python con el proyecto cargado.
-	uv run python
+	PYTHONPATH=src uv run python
 
 .PHONY: clean
 clean: ## 🧹 Limpia archivos temporales y caches.
