@@ -17,8 +17,8 @@ _PRODUCT_JSON = re.compile(r"(?:var|window)\.meta\s*=\s*(\{.*?\})\s*(?:;|</scrip
 class ShopifyExtractor(GenericHtmlExtractor):
     """Shopify-specific extractor with JSON-LD and meta product data."""
 
-    def __init__(self, html: str, headers: dict[str, str]) -> None:
-        super().__init__(html, headers)
+    def __init__(self, html: str, headers: dict[str, str], url: str | None = None) -> None:
+        super().__init__(html, headers, url)
         self._platform = EcommercePlatform.SHOPIFY
 
     async def extract_all(self) -> ExtractionResult:

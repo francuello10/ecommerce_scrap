@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import logging
 import re
-from playwright.async_api import async_playwright
+import os
+import json
+import base64
+from playwright.async_api import async_playwright, Page
+from openai import AsyncOpenAI
+from google import genai
+from google.genai import types
 
 from core.models import Competitor, NewsletterSubscription
 
@@ -16,6 +22,92 @@ class AutoSubscriber:
 
     def __init__(self, email_address: str) -> None:
         self.email_address = email_address
+        self.provider = os.getenv("CAPTCHA_SOLVER_PROVIDER", "openai").lower()
+        
+        self.openai_client = None
+        self.gemini_client = None
+        
+        if self.provider == "gemini":
+            self.gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY")) if os.getenv("GEMINI_API_KEY") else None
+        else:
+            self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
+
+    async def _solve_captcha(self, page: Page) -> bool:
+        """Takes a screenshot, sends to LLM to find the checkbox, and clicks it."""
+        if self.provider == "openai" and not self.openai_client:
+            logger.error("No OPENAI_API_KEY found, cannot solve CAPTCHA visually.")
+            return False
+        if self.provider == "gemini" and not self.gemini_client:
+            logger.error("No GEMINI_API_KEY found, cannot solve CAPTCHA visually.")
+            return False
+            
+        logger.info(f"  🤖 Attempting to solve CAPTCHA visually using {self.provider}...")
+        try:
+            # Wait a bit for the captcha iframe to fully load
+            await page.wait_for_timeout(3000)
+            
+            # Take a screenshot
+            screenshot_bytes = await page.screenshot(type="jpeg", quality=70)
+            b64_image = base64.b64encode(screenshot_bytes).decode("utf-8")
+            
+            prompt = "You are an automated assistant. Locate the CAPTCHA checkbox (e.g. \"I'm not a robot\" or Turnstile box) in this image to prove you are human. Return the exact X and Y coordinates (in pixels) of the center of the checkbox in pure JSON format, like this: `{\"x\": 100, \"y\": 200}`. Do not return any other text or markdown block, ONLY the JSON."
+            
+            content = ""
+            if self.provider == "openai":
+                response = await self.openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{b64_image}"
+                                    }
+                                }
+                            ],
+                        }
+                    ],
+                    max_tokens=100,
+                    temperature=0.1
+                )
+                content = response.choices[0].message.content.strip()
+            
+            elif self.provider == "gemini":
+                # Note: google-genai is mostly sync out of the box unless using specific async methods, 
+                # we'll use the sync call in this simple script step
+                response = self.gemini_client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[
+                        types.Part.from_bytes(data=screenshot_bytes, mime_type='image/jpeg'),
+                        prompt,
+                    ],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=100,
+                    )
+                )
+                content = response.text.strip()
+            
+            content = content.replace("```json", "").replace("```", "").strip()
+            
+            data = json.loads(content)
+            x, y = data.get("x"), data.get("y")
+            
+            if x is not None and y is not None:
+                logger.info("    🎯 AI found CAPTCHA exactly at X:%s, Y:%s. Clicking...", x, y)
+                await page.mouse.click(x, y)
+                await page.wait_for_timeout(4000)  # Wait for resolution
+                return True
+            else:
+                logger.warning("    AI couldn't find exact coordinates: %s", content)
+                return False
+                
+        except Exception as e:
+            logger.error("    AI Captcha solving failed: %s", e)
+            return False
 
     async def subscribe(self, competitor: Competitor) -> str:
         """
@@ -73,9 +165,11 @@ class AutoSubscriber:
 
                 # ── 3. Check for CAPTCHA ──────────────────────────────
                 content = await page.content()
-                if any(kw in content.lower() for kw in ["hcaptcha", "recaptcha", "g-recaptcha", "captcha"]):
+                if any(kw in content.lower() for kw in ["hcaptcha", "recaptcha", "g-recaptcha", "captcha", "turnstile"]):
                     logger.warning("CAPTCHA detected for %s", competitor.domain)
-                    return "FAILED_CAPTCHA"
+                    solved = await self._solve_captcha(page)
+                    if not solved:
+                        return "FAILED_CAPTCHA"
 
                 # ── 4. Fill and Submit ────────────────────────────────
                 await email_input.fill(self.email_address)

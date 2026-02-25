@@ -1,21 +1,20 @@
 """
 Tech Fingerprinting — Detects eCommerce platforms and technologies.
 
-Uses pywappalyzer (Wappalyzer wrapper) to identify the tech stack
-and saves results to CompetitorTechProfile.
+Uses pywappalyzer for JS/Analytics and custom checks for eCommerce platforms
+to avoid freezing on Cloudflare/bot protections.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime
+import re
 
 from pywappalyzer.wappalyzer import Pywappalyzer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
-import re
+from curl_cffi.requests import AsyncSession as CurlSession
 
 from core.models import (
     CompetitorTechProfile,
@@ -33,19 +32,53 @@ class TechFingerprinter:
         self.wappalyzer = Pywappalyzer()
 
     def _sanitize_html(self, html: str) -> str:
-        """
-        Strip inner content of <script> and <style> blocks to prevent ReDoS in Wappalyzer,
-        but preserve the tag attributes (src, etc.) for detection.
-        """
-        # Remove inner content but keep tag attributes
-        html = re.sub(
-            r"<(script|style)\b([^>]*)>.*?</\1>",
-            r"<\1\2></\1>",
-            html,
-            flags=re.DOTALL | re.IGNORECASE
-        )
-        # Limit total size to 512KB for safety
-        return html[:512 * 1024]
+        """Limit total size to 250KB for safety."""
+        return html[:250 * 1024]
+
+    async def _fetch_url(self, url: str) -> tuple[str, dict[str, str]]:
+        """Fetch URL using curl_cffi to bypass protections and get raw headers."""
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/121.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+        }
+        async with CurlSession(impersonate="chrome120", timeout=15.0) as client:
+            try:
+                response = await client.get(url, headers=headers)
+                return response.text, dict(response.headers)
+            except Exception as e:
+                logger.warning("Failed to fetch %s for fingerprinting: %s", url, e)
+                return "", {}
+
+    def _detect_ecommerce_platform(self, html: str, headers: dict[str, str]) -> str | None:
+        """Custom aggressive detection for LATAM ecosystem platforms."""
+        headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
+        
+        # 1. Check HTTP Headers
+        if "x-vtex-root" in headers_lower or "x-vtex-meta" in headers_lower or "vtex" in headers_lower.get("server", ""):
+            return "VTEX"
+        if "shopify" in headers_lower.get("server", "") or "x-shopid" in headers_lower:
+            return "Shopify"
+        if "prestashop" in headers_lower.get("x-powered-by", ""):
+            return "PrestaShop"
+
+        # 2. Check HTML Footprints
+        html_lower = html.lower()
+        if "vtex" in html_lower or "vtexassets.com" in html_lower or "__state__" in html_lower:
+            return "VTEX"
+        if "shopify.com" in html_lower or "cdn.shopify.com" in html_lower:
+            return "Shopify"
+        if "wp-content/plugins/woocommerce" in html_lower or "woocommerce-" in html_lower:
+            return "WooCommerce"
+        if "tiendanube.com" in html_lower or "d26lpennugtm8s.cloudfront.net" in html_lower:
+            return "TiendaNube"
+        if "magento" in html_lower or "mage/cookies.js" in html_lower:
+            return "Magento"
+        
+        return None
 
     async def fingerprint_competitor(
         self,
@@ -53,26 +86,32 @@ class TechFingerprinter:
         competitor_id: int,
         url: str,
         html: str | None = None,
-    ) -> CompetitorTechProfile:
+    ) -> CompetitorTechProfile | None:
         """
         Analyze a URL/HTML to detect technologies and update the profile.
-        If html is provided, it uses it to avoid redundant fetches.
         """
         try:
             logger.info("  Fingerprinting tech for competitor %d (URL: %s)", competitor_id, url)
             
-            if html:
-                # Use analyze_html (requires bytes) after sanitization
-                logger.info("    Using sanitized HTML for faster analysis")
-                sanitized = self._sanitize_html(html)
-                results = self.wappalyzer.analyze_html(html=sanitized.encode("utf-8"))
-            else:
-                logger.info("    No HTML provided, fetching URL...")
-                results = self.wappalyzer.analyze(url)
+            headers = {}
+            if not html:
+                logger.info("    Fetching URL internally...")
+                html, headers = await self._fetch_url(url)
             
-            logger.info("    Detection complete. Found %d categories", len(results))
+            if not html:
+                logger.warning("    No HTML available to fingerprint.")
+                return None
+
+            # Detect platform via custom fast paths
+            platform = self._detect_ecommerce_platform(html, headers)
+            if platform:
+                logger.info("    Aggressive detection matched: %s", platform)
+
+            # Analyze other scripts using Wappalyzer
+            sanitized = self._sanitize_html(html)
+            results = self.wappalyzer.analyze_html(html=sanitized.encode("utf-8"))
             
-            # Map Wappalyzer categories to our DB fields
+            # Map Wappalyzer categories
             cat_map = {
                 "eCommerce": "ecommerce_platform",
                 "Analytics": "analytics_tools",
@@ -85,7 +124,7 @@ class TechFingerprinter:
             }
             
             extracted = {
-                "ecommerce_platform": None,
+                "ecommerce_platform": platform, # Prioritize custom override
                 "analytics_tools": [],
                 "marketing_automation": [],
                 "tag_managers": [],
@@ -101,6 +140,9 @@ class TechFingerprinter:
                     if isinstance(extracted[field], list):
                         extracted[field].extend(techs)
                     else:
+                        # Only overwrite ecommerce_platform if custom detection failed
+                        if field == "ecommerce_platform" and extracted["ecommerce_platform"]:
+                            continue
                         extracted[field] = techs[0] if techs else None
 
             # Fetch or create profile
@@ -110,7 +152,6 @@ class TechFingerprinter:
             profile = result.scalar_one_or_none()
 
             if not profile:
-                logger.info("    Creating new tech profile")
                 profile = CompetitorTechProfile(
                     competitor_id=competitor_id,
                     **extracted,
@@ -119,8 +160,6 @@ class TechFingerprinter:
                 )
                 session.add(profile)
             else:
-                logger.info("    Updating existing tech profile")
-                # Update fields and track changes
                 for field, new_val in extracted.items():
                     old_val = getattr(profile, field)
                     if old_val != new_val:
@@ -145,6 +184,7 @@ class TechFingerprinter:
                 full_fingerprint_json=results,
             ))
             
+            await session.commit()
             return profile
 
         except Exception as e:

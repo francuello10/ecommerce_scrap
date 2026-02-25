@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 class TiendanubeExtractor(GenericHtmlExtractor):
     """TiendaNube / Nuvemshop extractor. Reads window.LS boot object."""
 
-    def __init__(self, html: str, headers: dict[str, str]) -> None:
-        super().__init__(html, headers)
+    def __init__(self, html: str, headers: dict[str, str], url: str | None = None) -> None:
+        super().__init__(html, headers, url)
         self._platform = EcommercePlatform.TIENDANUBE
 
     async def extract_all(self) -> ExtractionResult:

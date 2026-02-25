@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 class WooCommerceExtractor(GenericHtmlExtractor):
     """WooCommerce extractor. Uses .woocommerce-Price-amount and REST API hints."""
 
-    def __init__(self, html: str, headers: dict[str, str]) -> None:
-        super().__init__(html, headers)
+    def __init__(self, html: str, headers: dict[str, str], url: str | None = None) -> None:
+        super().__init__(html, headers, url)
         self._platform = EcommercePlatform.WOOCOMMERCE
 
     async def extract_all(self) -> ExtractionResult:

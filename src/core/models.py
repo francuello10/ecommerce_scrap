@@ -37,7 +37,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -364,6 +364,11 @@ class Competitor(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    last_newsletter_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    days_since_last_newsletter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_days_between_newsletters: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    sitemap_file_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+
     # Relationships
     client_links: Mapped[list["ClientCompetitor"]] = relationship("ClientCompetitor", back_populates="competitor")
     industry_links: Mapped[list["CompetitorIndustry"]] = relationship("CompetitorIndustry", back_populates="competitor")
@@ -612,19 +617,27 @@ class Product(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     competitor_id: Mapped[int] = mapped_column(ForeignKey("competitor.id"), nullable=False)
     sku: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
     brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    title: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    category_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    category_tree: Mapped[list | None] = mapped_column(JSONB, nullable=True) # Full hierarchy
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    category_tree: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    images: Mapped[list | None] = mapped_column(JSONB, nullable=True) # Multiple URLs
-    financing_options: Mapped[dict | None] = mapped_column(JSONB, nullable=True) # 12 cuotas, etc.
-    discovered_from: Mapped[str | None] = mapped_column(String(2048), nullable=True) # URL where found (grid/list)
+    images: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    
+    current_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    financing_options: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    discovered_from: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     rating_avg: Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
     review_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    badges: Mapped[list | None] = mapped_column(JSONB, nullable=True) # ["NUEVO", "BEST SELLER"]
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True) # Generic catch-all
+    
+    directus_image_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -10,7 +10,10 @@ from __future__ import annotations
 from arq import cron
 from arq.connections import RedisSettings
 
+import logging
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 async def run_web_monitor(ctx: dict) -> None:
@@ -22,7 +25,7 @@ async def run_web_monitor(ctx: dict) -> None:
 async def run_newsletter_reader(ctx: dict) -> None:
     """ARQ job: Full Newsletter Monitor pipeline."""
     from core.database import async_session_factory
-    from core.models import NewsletterAccount, Competitor, NewsletterStatus, SignalSource
+    from core.models import NewsletterAccount, Competitor, NewsletterStatus, SignalSource, NewsletterSubscription
     from workers.newsletter_monitor.imap_reader import ImapReader
     from workers.newsletter_monitor.parser import NewsletterParser
     from workers.newsletter_monitor.auto_subscriber import AutoSubscriber
@@ -50,22 +53,23 @@ async def run_newsletter_reader(ctx: dict) -> None:
                 # For MVP, we'll assume HTML is available in msg.raw_html_path or just pass body
                 # Simplified: skip for now as ImapReader needs to save the raw body
                 
-        # 2. Check for PENDING_AUTO competitors to subscribe
+        # 2. Check for PENDING_AUTO subscriptions to process
+        from sqlalchemy.orm import selectinload
         result = await session.execute(
-            select(Competitor).where(Competitor.newsletter_status == NewsletterStatus.PENDING_AUTO)
+            select(NewsletterSubscription).options(selectinload(NewsletterSubscription.competitor)).where(NewsletterSubscription.status == NewsletterStatus.PENDING_AUTO)
         )
         to_subscribe = result.scalars().all()
         
         if to_subscribe:
             for account in accounts:
                 subscriber = AutoSubscriber(account.email_address)
-                for comp in to_subscribe:
-                    status = await subscriber.subscribe(comp)
-                    logger.info("  📫 Auto-sub for %s: %s", comp.domain, status)
+                for sub in to_subscribe:
+                    status = await subscriber.subscribe(sub.competitor)
+                    logger.info("  📫 Auto-sub for %s: %s", sub.competitor.domain, status)
                     if status == "SUCCESS":
-                        comp.newsletter_status = NewsletterStatus.PENDING_OPTIN
+                        sub.status = NewsletterStatus.PENDING_OPTIN
                     elif status == "FAILED_CAPTCHA":
-                        comp.newsletter_status = NewsletterStatus.PENDING_MANUAL
+                        sub.status = NewsletterStatus.PENDING_MANUAL
                     
         await session.commit()
 

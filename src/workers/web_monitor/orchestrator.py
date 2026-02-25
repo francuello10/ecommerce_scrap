@@ -14,12 +14,16 @@ This is the heart of the daily monitoring cron.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
-
+from playwright.async_api import async_playwright
 import httpx
+
+from curl_cffi.requests import AsyncSession as CurlSession, RequestsError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from core.models import (
     CompetitorStatus,
     MonitoredPage,
@@ -59,16 +63,66 @@ REQUEST_TIMEOUT = 30.0
 async def fetch_page_html(url: str) -> tuple[str, dict[str, str]]:
     """
     Fetch a URL and return (html_content, response_headers).
-    Raises httpx.HTTPError on failure.
+    Raises RequestsError on failure.
     """
-    async with httpx.AsyncClient(
+    async with CurlSession(
         headers=DEFAULT_HEADERS,
         timeout=REQUEST_TIMEOUT,
-        follow_redirects=True,
+        impersonate="chrome120",
     ) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.text, dict(response.headers)
+
+
+async def _capture_homepage_screenshot(url: str, snapshot_id: int) -> str | None:
+    """Capture a visual screenshot of a homepage using Playwright."""
+    try:
+        os.makedirs("public/snapshots", exist_ok=True)
+        filepath = f"public/snapshots/snapshot_{snapshot_id}.jpg"
+        
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page(
+                user_agent=DEFAULT_HEADERS["User-Agent"]
+            )
+            await page.set_viewport_size({"width": 1280, "height": 800})
+            
+            # Fast navigation, wait for domcontentloaded to handle 403 pages smoothly
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                await page.wait_for_timeout(3000)
+            except Exception as nav_e:
+                logger.debug("Playwright navigation incomplete, but taking screenshot anyway: %s", nav_e)
+            
+            await page.screenshot(path=filepath, type="jpeg", quality=60, full_page=False)
+            await browser.close()
+            
+            # Subir a Directus
+            url_upload = f"{settings.directus_url}/files"
+            headers = {"Authorization": f"Bearer {settings.directus_key}"} if settings.directus_key else {}
+            
+            try:
+                with open(filepath, "rb") as fp:
+                    files = {"file": (f"snapshot_{snapshot_id}.jpg", fp, "image/jpeg")}
+                    data = {"title": f"Snapshot {snapshot_id} - {url}"}
+                    
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(url_upload, headers=headers, files=files, data=data)
+                        if resp.status_code == 200:
+                            file_id = resp.json().get("data", {}).get("id")
+                            logger.info("Screenshot subido a Directus exitosamente: UUID %s", file_id)
+                            return file_id
+                        else:
+                            logger.error("Error subiendo screenshot a Directus: %s", resp.text)
+                            return f"/public/snapshots/snapshot_{snapshot_id}.jpg"
+            except Exception as up_e:
+                logger.error("Fallo la subida a Directus: %s", up_e)
+                return f"/public/snapshots/snapshot_{snapshot_id}.jpg"
+                
+    except Exception as e:
+        logger.warning("Failed to capture screenshot for %s: %s", url, e)
+        return None
 
 
 async def process_monitored_page(
@@ -90,7 +144,7 @@ async def process_monitored_page(
     # 1. Fetch HTML
     try:
         html, headers = await fetch_page_html(page.url)
-    except httpx.HTTPError as exc:
+    except RequestsError as exc:
         logger.warning("Failed to fetch %s: %s", page.url, exc)
         # Save error snapshot
         snapshot = PageSnapshot(
@@ -109,6 +163,14 @@ async def process_monitored_page(
     )
     session.add(snapshot)
     await session.flush()  # get snapshot.id
+
+    if page.page_type == PageType.HOMEPAGE:
+        logger.info("  📸 Capturing visual screenshot for homepage...")
+        screenshot_path = await _capture_homepage_screenshot(page.url, snapshot.id)
+        if screenshot_path:
+            # We save the absolute filesystem path so python/directus can eventually map it
+            # For this MVP, we save it as a local URL reference
+            snapshot.screenshot_url = f"file://{os.path.abspath(screenshot_path)}"
 
     # 3. Detect platform
     detector = PlatformDetector()
@@ -215,6 +277,7 @@ async def _save_product_data(
             category_tree=data.category_tree,
             description=data.description,
             images=data.images,
+            current_price=data.sale_price or data.list_price,
             financing_options={"installments": data.installments} if data.installments else None,
             discovered_from=data.source_url or page.url,
             rating_avg=data.rating,
@@ -231,6 +294,7 @@ async def _save_product_data(
         product.category_tree = data.category_tree or product.category_tree
         product.description = data.description or product.description
         product.images = data.images or product.images
+        product.current_price = data.sale_price or data.list_price or product.current_price
         product.financing_options = {"installments": data.installments} if data.installments else product.financing_options
         product.discovered_from = data.source_url or product.discovered_from or page.url
         product.rating_avg = data.rating or product.rating_avg

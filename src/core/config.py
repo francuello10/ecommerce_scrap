@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     google_client_id: str = Field(default="")
     google_client_secret: str = Field(default="")
 
+    # ── Directus ──────────────────────────────────────────────────────
+    directus_key: str = Field(default="")
+    directus_url: str = Field(default="http://localhost:8055")
+
     # ── Email IMAP ────────────────────────────────────────────────────
     email_server_host: str = Field(default="imap.gmail.com")
     email_server_port: int = Field(default=993)

@@ -140,25 +140,44 @@ class GenericHtmlExtractor(BaseExtractor):
         
         # Post-process products with page context
         from urllib.parse import urljoin
+        import dataclasses
+        
+        updated_products = []
         for p in result.products:
-            if not p.source_url:
-                p.source_url = self.url
-            if p.images:
+            new_source_url = p.source_url or self.url
+            new_images = p.images
+            new_image_url = p.image_url
+            
+            if new_images:
                 # Fix relative URLs
-                p.images = [urljoin(self.url, img) for img in p.images]
-                p.image_url = p.images[0] if p.images else p.image_url
+                new_images = [urljoin(self.url, img) for img in new_images]
+                new_image_url = new_images[0]
             
             # Absolute URL for main image if not in gallery
-            if p.image_url and not p.image_url.startswith(("http://", "https://")):
-                p.image_url = urljoin(self.url, p.image_url)
+            if new_image_url and not new_image_url.startswith(("http://", "https://")):
+                new_image_url = urljoin(self.url, new_image_url)
 
-            if not p.installments and result.financing:
+            new_installments = p.installments
+            if not new_installments and result.financing:
                 best_fin = sorted(result.financing, key=lambda x: x.installments or 0, reverse=True)[0]
-                p.installments = best_fin.raw_text
+                new_installments = best_fin.raw_text
 
+            new_badges = p.badges
             # Generic Badge Parse
-            if not p.badges:
-                p.badges = self._extract_generic_badges()
+            if not new_badges:
+                new_badges = self._extract_generic_badges()
+                
+            updated_p = dataclasses.replace(
+                p, 
+                source_url=new_source_url, 
+                images=new_images, 
+                image_url=new_image_url, 
+                installments=new_installments, 
+                badges=new_badges
+            )
+            updated_products.append(updated_p)
+            
+        result.products = updated_products
 
         return result
 
@@ -177,6 +196,7 @@ class GenericHtmlExtractor(BaseExtractor):
     async def _extract_products_internal(self) -> list[ProductData]:
         """Core generic extraction logic, safe for subclass fallback."""
         products = []
+        new_products = []
         # 1. Try JSON-LD (Schema.org)
         for script in self.soup.find_all("script", type="application/ld+json"):
             try:
@@ -199,7 +219,21 @@ class GenericHtmlExtractor(BaseExtractor):
                 continue
 
         if products:
-            return products
+            for p in products:
+                if not p.list_price and not p.sale_price:
+                    dom_price = self._extract_dom_price()
+                    if dom_price:
+                        # Cannot modify frozen dataclass directly easily, so we yield a new one later or use setattr if allowed. 
+                        # Dataclass is frozen, so we recreate it.
+                        p_dict = {f: getattr(p, f) for f in p.__annotations__.keys()}
+                        p_dict['list_price'] = dom_price
+                        p_dict['sale_price'] = dom_price
+                        new_products.append(ProductData(**p_dict))
+                    else:
+                        new_products.append(p)
+                else:
+                    new_products.append(p)
+            return new_products
 
         # 2. Try OpenGraph / Meta tags
         og_data = self._extract_og_product()
@@ -400,16 +434,41 @@ class GenericHtmlExtractor(BaseExtractor):
         if not get_meta("og:type") == "product" and not price:
             return None
 
+        # Fallback to DOM price scraping
+        final_price = float(price) if price else self._extract_dom_price()
+
         return ProductData(
             title=title,
             description=description,
-            list_price=float(price) if price else None,
+            list_price=final_price,
+            sale_price=final_price,
             currency=currency,
             image_url=image,
             images=[image] if image else [],
             category_tree=self._extract_breadcrumb_categories(),
             is_in_stock=True, # Default if meta present
         )
+
+    def _extract_dom_price(self) -> float | None:
+        """Fallback to aggressively scan DOM for obvious price tags."""
+        price_selectors = [
+            ".price", "[itemprop='price']", ".sale-price", ".regular-price", 
+            ".woocommerce-Price-amount", ".precio", ".product-price", "#price",
+            "[data-price]"
+        ]
+        
+        for sel in price_selectors:
+            elements = self.selector.css(sel)
+            for el in elements:
+                # Get the innermost text
+                txt = el.text
+                if not txt: continue
+                # Validate it looks like a price ($12.000, 12000, etc)
+                if '$' in txt or any(c.isdigit() for c in txt):
+                    cleaned = self._clean_price(txt)
+                    if cleaned and cleaned > 0:
+                        return cleaned
+        return None
 
     def _extract_breadcrumb_categories(self) -> list[str]:
         """Attempt to extract the category tree from breadcrumbs."""

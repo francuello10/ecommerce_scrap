@@ -128,6 +128,12 @@ class ImapReader:
 
         is_optin = self._is_optin_email(msg)
 
+        # Extract plain text preview
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(msg.html, "html.parser")
+        plain_text = soup.get_text(separator=" ", strip=True)
+        preview = plain_text[:250] + "..." if len(plain_text) > 250 else plain_text
+
         newsletter_msg = NewsletterMessage(
             competitor_id=competitor_id,
             newsletter_account_id=self.account.id,
@@ -136,6 +142,8 @@ class ImapReader:
             received_at=msg.date,
             is_optin_confirmation=is_optin,
             raw_html_path=str(file_path),
+            body_html=msg.html,
+            body_preview=preview,
             status="RECEIVED",
         )
         session.add(newsletter_msg)

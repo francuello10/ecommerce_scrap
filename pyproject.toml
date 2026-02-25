@@ -25,17 +25,14 @@ dependencies = [
     # Email
     "imap-tools>=1.7.1",
     "email-validator>=2.2.0",
-    # Tech Fingerprinting
-    # NOTE: python-Wappalyzer is dated (2020). For deep fingerprinting we'll
-    # build our own heuristics (PlatformDetector) + optionally install
-    # s0md3v/wappalyzer-next from GitHub when needed:
-    #   uv pip install "git+https://github.com/AliYmn/pywappalyzer"
-    "pywappalyzer>=0.1.0",
     # Utilities
     "python-dotenv>=1.0.0",
     "psycopg2-binary>=2.9.11",
     "google-generativeai>=0.8.6",
     "openai>=2.23.0",
+    "curl-cffi>=0.14.0",
+    "google-genai>=1.64.0",
+    "pywappalyzer>=0.1.1",
 ]
 
 [dependency-groups]

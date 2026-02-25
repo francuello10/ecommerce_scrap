@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 class MagentoExtractor(GenericHtmlExtractor):
     """Magento 2 extractor. Uses .price-box and installment block selectors."""
 
-    def __init__(self, html: str, headers: dict[str, str]) -> None:
-        super().__init__(html, headers)
+    def __init__(self, html: str, headers: dict[str, str], url: str | None = None) -> None:
+        super().__init__(html, headers, url)
         self._platform = EcommercePlatform.MAGENTO
 
     async def extract_all(self) -> ExtractionResult:

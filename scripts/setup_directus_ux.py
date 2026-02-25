@@ -8,8 +8,8 @@ import asyncio
 import sys
 
 DIRECTUS_URL = "http://localhost:8055"
-ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "password" # User should ensure this matches
+ADMIN_EMAIL = "francuello.1999@gmail.com"
+ADMIN_PASSWORD = "monaco99" 
 
 async def setup_ux():
     print(f"🚀 Starting Directus UX Automation at {DIRECTUS_URL}...")
@@ -29,29 +29,68 @@ async def setup_ux():
             print("⚠️ Make sure Directus is running and credentials are correct in the script.")
             return
 
+        # 1b. Unhide collections so they appear in Directus sidebar
+        tables_to_manage = [
+            "daily_brief", "weekly_brief", "newsletter_message", 
+            "page_snapshot", "change_event", "product", 
+            "product_variant", "subscription_tier", "client", 
+            "job_execution_log", "competitor_tech_profile",
+            "tech_profile_change", "monitored_page", "newsletter_account"
+        ]
+        
+        for table in tables_to_manage:
+            try:
+                # Directus automatically identifies DB tables, we just need to ensure they have an unhidden meta
+                await client.post(
+                    f"{DIRECTUS_URL}/collections", 
+                    json={"collection": table}, 
+                    headers=headers
+                )
+            except:
+                pass # Already managed
+                
+            try:
+                print(f"�️ Ensuring collection is visible: {table}...")
+                await client.patch(
+                    f"{DIRECTUS_URL}/collections/{table}", 
+                    json={"meta": {"hidden": False}}, 
+                    headers=headers
+                )
+            except Exception as e:
+                print(f"⚠️ Error unhiding {table}: {e}")
+
         # 2. Configure Field Displays & Interfaces
         # Note: Directus stores these in system tables. We update them via the /fields endpoint.
         
         fields_to_update = [
             # Screenshots
             {"collection": "page_snapshot", "field": "screenshot_url", "meta": {
-                "interface": "image",
+                "interface": "input",
                 "display": "image",
-                "display_options": {"circle": False, "size": "medium"}
+                "display_options": {"circle": False, "size": "large"}
             }},
-            # Mails
+            # Signals (One-To-Many relational view)
+            {"collection": "page_snapshot", "field": "signals", "meta": {
+                "interface": "list-o2m",
+                "display": "related-values",
+                "display_options": {"template": "{{raw_text_found}} ({{confidence_score}})"}
+            }},
+            # Mails (Displaying HTML visually)
             {"collection": "newsletter_message", "field": "body_html", "meta": {
-                "interface": "input-code",
-                "options": {"language": "html"},
-                "display": "raw"
+                "interface": "input-rich-text-html",
+                "display": "formatted-text"
             }},
             {"collection": "newsletter_message", "field": "body_preview", "meta": {
                 "interface": "textarea",
                 "display": "raw"
             }},
-            # AI Briefs
+            # AI Briefs (Rendering Markdown)
             {"collection": "daily_brief", "field": "content_markdown", "meta": {
-                "interface": "markdown",
+                "interface": "input-rich-text-md",
+                "display": "formatted-text"
+            }},
+            {"collection": "weekly_brief", "field": "content_markdown", "meta": {
+                "interface": "input-rich-text-md",
                 "display": "formatted-text"
             }},
             # Signal Severity
@@ -91,10 +130,29 @@ async def setup_ux():
                 "display": "currency",
                 "display_options": {"symbol": "$", "suffix": True}
             }},
+            {"collection": "product", "field": "current_price", "meta": {
+                "interface": "input",
+                "display": "currency",
+                "display_options": {"symbol": "$", "suffix": True}
+            }},
             # Premium Fields
             {"collection": "product", "field": "description", "meta": {
                 "interface": "markdown",
                 "display": "formatted-text"
+            }},
+            
+            # Images & Files (Mapped Native Directus UUIDs)
+            {"collection": "product", "field": "directus_image_id", "meta": {
+                "interface": "file-image",
+                "display": "image"
+            }},
+            {"collection": "competitor", "field": "sitemap_file_id", "meta": {
+                "interface": "file",
+                "display": "file"
+            }},
+            {"collection": "page_snapshot", "field": "screenshot_url", "meta": {
+                "interface": "file-image",
+                "display": "image"
             }},
             {"collection": "product", "field": "images", "meta": {
                 "interface": "list",
@@ -103,6 +161,17 @@ async def setup_ux():
             {"collection": "product", "field": "category_tree", "meta": {
                 "interface": "list",
                 "display": "raw"
+            }},
+            # Relational Displays
+            {"collection": "competitor_tech_profile", "field": "competitor_id", "meta": {
+                "interface": "select-dropdown-m2o",
+                "display": "related-values",
+                "display_options": {"template": "{{name}}"}
+            }},
+            {"collection": "page_snapshot", "field": "monitored_page_id", "meta": {
+                "interface": "select-dropdown-m2o",
+                "display": "related-values",
+                "display_options": {"template": "{{url}}"}
             }}
         ]
 
